@@ -1,0 +1,186 @@
+import subprocess
+import sys
+from pathlib import Path
+
+import aws_cdk as cdk
+import jsii
+from aws_cdk import (
+    aws_apigatewayv2 as apigwv2,
+    aws_apigatewayv2_authorizers as apigw_auth,
+    aws_apigatewayv2_integrations as apigw_int,
+    aws_cloudfront as cloudfront,
+    aws_cloudfront_origins as origins,
+    aws_cognito as cognito,
+    aws_dynamodb as dynamodb,
+    aws_lambda as _lambda,
+    aws_s3 as s3,
+)
+from constructs import Construct
+
+BACKEND_DIR = Path(__file__).resolve().parents[2] / "backend"
+
+
+@jsii.implements(cdk.ILocalBundling)
+class LocalPipBundling:
+    """Bundle the backend without Docker: pip-install Lambda-compatible wheels."""
+
+    def try_bundle(self, output_dir: str, *, image=None, **kwargs) -> bool:
+        try:
+            subprocess.run(
+                [
+                    sys.executable, "-m", "pip", "install",
+                    "-r", str(BACKEND_DIR / "requirements.txt"),
+                    "--target", output_dir,
+                    "--platform", "manylinux2014_aarch64",
+                    "--implementation", "cp",
+                    "--python-version", "3.12",
+                    "--only-binary=:all:",
+                    "--upgrade",
+                    "--quiet",
+                ],
+                check=True,
+            )
+            subprocess.run(
+                ["cp", "-r", str(BACKEND_DIR / "app"), output_dir], check=True
+            )
+        except subprocess.CalledProcessError:
+            return False
+        return True
+
+
+class SongwriterStack(cdk.Stack):
+    def __init__(self, scope: Construct, construct_id: str, *, env_name: str, **kwargs):
+        super().__init__(scope, construct_id, **kwargs)
+
+        prefix = f"smartvibes-songwriter-{env_name}"
+        retain = cdk.RemovalPolicy.RETAIN
+
+        # --- DynamoDB: single table (plan section 5) ---
+        table = dynamodb.Table(
+            self,
+            "Table",
+            table_name=f"{prefix}-table",
+            partition_key=dynamodb.Attribute(name="PK", type=dynamodb.AttributeType.STRING),
+            sort_key=dynamodb.Attribute(name="SK", type=dynamodb.AttributeType.STRING),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            time_to_live_attribute="ttl",
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True
+            ),
+            removal_policy=retain,
+        )
+
+        # --- Cognito user pool ---
+        # Google sign-in (federated IdP) and a hosted-UI domain are added later,
+        # once the Google OAuth client exists.
+        user_pool = cognito.UserPool(
+            self,
+            "UserPool",
+            user_pool_name=f"{prefix}-users",
+            self_sign_up_enabled=True,
+            sign_in_aliases=cognito.SignInAliases(email=True),
+            auto_verify=cognito.AutoVerifiedAttrs(email=True),
+            account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
+            removal_policy=retain,
+        )
+        user_pool_client = user_pool.add_client(
+            "WebClient",
+            user_pool_client_name=f"{prefix}-web",
+            generate_secret=False,  # public SPA client
+            auth_flows=cognito.AuthFlow(user_srp=True),
+            prevent_user_existence_errors=True,
+        )
+
+        # --- Static front end: private S3 bucket behind CloudFront (OAC) ---
+        site_bucket = s3.Bucket(
+            self,
+            "SiteBucket",
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            enforce_ssl=True,
+            removal_policy=cdk.RemovalPolicy.DESTROY,  # build artifacts only
+            auto_delete_objects=True,
+        )
+        distribution = cloudfront.Distribution(
+            self,
+            "Distribution",
+            comment=f"{prefix}-web",
+            default_root_object="index.html",
+            default_behavior=cloudfront.BehaviorOptions(
+                origin=origins.S3BucketOrigin.with_origin_access_control(site_bucket),
+                viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+            ),
+            # SPA fallback
+            error_responses=[
+                cloudfront.ErrorResponse(
+                    http_status=403, response_http_status=200, response_page_path="/index.html"
+                ),
+                cloudfront.ErrorResponse(
+                    http_status=404, response_http_status=200, response_page_path="/index.html"
+                ),
+            ],
+        )
+        # TODO: BucketDeployment of frontend/dist once the deploy step is agreed.
+
+        # --- Lambda: FastAPI via Mangum ---
+        api_fn = _lambda.Function(
+            self,
+            "ApiFunction",
+            function_name=f"{prefix}-api",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            architecture=_lambda.Architecture.ARM_64,
+            handler="app.main.handler",
+            code=_lambda.Code.from_asset(
+                str(BACKEND_DIR),
+                bundling=cdk.BundlingOptions(
+                    # Docker fallback if the local bundler fails.
+                    image=_lambda.Runtime.PYTHON_3_12.bundling_image,
+                    platform="linux/arm64",
+                    command=[
+                        "bash", "-c",
+                        "pip install -r requirements.txt -t /asset-output && cp -r app /asset-output/",
+                    ],
+                    local=LocalPipBundling(),
+                ),
+            ),
+            memory_size=512,
+            timeout=cdk.Duration.seconds(30),
+            environment={"TABLE_NAME": table.table_name},
+        )
+        table.grant_read_write_data(api_fn)
+
+        # --- API Gateway HTTP API with Cognito JWT authorizer ---
+        allowed_origins = [f"https://{distribution.distribution_domain_name}", "http://localhost:5173"]
+        http_api = apigwv2.HttpApi(
+            self,
+            "HttpApi",
+            api_name=f"{prefix}-api",
+            cors_preflight=apigwv2.CorsPreflightOptions(
+                allow_origins=allowed_origins,
+                allow_methods=[apigwv2.CorsHttpMethod.ANY],
+                allow_headers=["authorization", "content-type"],
+            ),
+            default_authorizer=apigw_auth.HttpUserPoolAuthorizer(
+                "CognitoAuthorizer", user_pool, user_pool_clients=[user_pool_client]
+            ),
+            default_integration=apigw_int.HttpLambdaIntegration("ApiIntegration", api_fn),
+        )
+        # /health is public; everything else requires a valid JWT.
+        http_api.add_routes(
+            path="/health",
+            methods=[apigwv2.HttpMethod.GET],
+            integration=apigw_int.HttpLambdaIntegration("HealthIntegration", api_fn),
+            authorizer=apigwv2.HttpNoneAuthorizer(),
+        )
+        # Request-flood protection (plan section 6). Tune later.
+        default_stage = http_api.default_stage.node.default_child
+        default_stage.default_route_settings = apigwv2.CfnStage.RouteSettingsProperty(
+            throttling_burst_limit=20, throttling_rate_limit=10
+        )
+
+        # --- Outputs ---
+        cdk.CfnOutput(self, "SiteUrl", value=f"https://{distribution.distribution_domain_name}")
+        cdk.CfnOutput(self, "ApiUrl", value=http_api.api_endpoint)
+        cdk.CfnOutput(self, "UserPoolId", value=user_pool.user_pool_id)
+        cdk.CfnOutput(self, "UserPoolClientId", value=user_pool_client.user_pool_client_id)
+        cdk.CfnOutput(self, "TableName", value=table.table_name)

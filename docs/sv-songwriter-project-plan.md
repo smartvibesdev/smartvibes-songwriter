@@ -30,7 +30,7 @@ The app is public, so **cost control is a first-class feature**, not an aftertho
 These are what make the project stand out. Protect them when scope gets tight.
 
 1. **Works from your own catalog.** The AI resurfaces relevant old fragments and drafts new songs using the user's own material (retrieval-augmented generation, RAG).
-2. **Constraint-based idea generation.** Claude's temperature range is 0 to 1, so instead of cranking randomness, feed the model random seed words, forced perspectives, and odd constraints (in the spirit of Eno's *Oblique Strategies*).
+2. **Constraint-based idea generation.** Claude's temperature range is 0 to 1, so instead of cranking randomness, feed the model random seed words, forced perspectives, and odd constraints (in the spirit of Eno's _Oblique Strategies_).
 3. **Visible token meter.** The UI shows each user's remaining daily AI budget and how many tokens each action used.
 4. **Near-rhyme finder with no AI.** Phonetic lookup (for example, "home" / "stone") costs zero tokens. Use AI only where it adds value.
 5. **MCP server for direct access from Claude.** A Model Context Protocol server exposes fragment operations (add a fragment, search fragments, maybe "draft using my fragments") so Claude itself can read and write to the app's data, separate from the web UI. This is a current, resume-relevant skill on its own, and it reuses the same backend logic as the web app rather than duplicating it. Not every MCP operation costs tokens — adding or searching fragments is plain data access and should be called out in the write-up as an example of AI-adjacent work that doesn't burn budget.
@@ -95,32 +95,32 @@ The MCP server is a second, thin interface into the same fragment/song service l
 
 ### Tech stack
 
-| Layer | Choice | Why |
-|---|---|---|
-| Front end | React + TypeScript + Vite | Largest hiring demand; good ecosystem for streaming UIs |
-| Back end | Python 3.12, FastAPI | Real Python API, typed, auto-generated docs |
-| Hosting | AWS Lambda + API Gateway | Near-zero cost when idle |
-| Database | DynamoDB | Cheap, serverless, atomic counters for quotas |
-| Auth | Amazon Cognito + Google sign-in | Standard, avoids hand-rolled auth |
-| AI (small tools) | Claude Haiku 4.5 (`claude-haiku-4-5-20251001`) | Fast and cheap |
-| AI (drafting) | Claude Sonnet 5 (`claude-sonnet-5`) | Better quality for long output |
-| Infrastructure | AWS CDK (Python) | Repeatable, reviewable infrastructure |
-| CI/CD | GitHub Actions | Deploy on merge to main |
-| Tests | pytest, Vitest, Playwright (one smoke test) | Enough to show discipline |
-| MCP server | Python, official MCP SDK | Lets Claude add/search fragments directly; calls the same backend service functions as the web app |
+| Layer            | Choice                                         | Why                                                                                                |
+| ---------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Front end        | React + TypeScript + Vite                      | Largest hiring demand; good ecosystem for streaming UIs                                            |
+| Back end         | Python 3.12, FastAPI                           | Real Python API, typed, auto-generated docs                                                        |
+| Hosting          | AWS Lambda + API Gateway                       | Near-zero cost when idle                                                                           |
+| Database         | DynamoDB                                       | Cheap, serverless, atomic counters for quotas                                                      |
+| Auth             | Amazon Cognito + Google sign-in                | Standard, avoids hand-rolled auth                                                                  |
+| AI (small tools) | Claude Haiku 4.5 (`claude-haiku-4-5-20251001`) | Fast and cheap                                                                                     |
+| AI (drafting)    | Claude Sonnet 5 (`claude-sonnet-5`)            | Better quality for long output                                                                     |
+| Infrastructure   | AWS CDK (Python)                               | Repeatable, reviewable infrastructure                                                              |
+| CI/CD            | GitHub Actions                                 | Deploy on merge to main                                                                            |
+| Tests            | pytest, Vitest, Playwright (one smoke test)    | Enough to show discipline                                                                          |
+| MCP server       | Python, official MCP SDK                       | Lets Claude add/search fragments directly; calls the same backend service functions as the web app |
 
 ---
 
 ## 5. Data model (DynamoDB, single table)
 
-| Entity | PK | SK | Key attributes |
-|---|---|---|---|
-| User profile | `USER#<id>` | `PROFILE` | email, created_at, invite_code, daily_budget |
-| Song | `USER#<id>` | `SONG#<id>` | title, body, updated_at |
-| Fragment | `USER#<id>` | `FRAG#<id>` | text, tags, embedding (later), updated_at |
-| User usage | `USER#<id>` | `USAGE#<YYYY-MM-DD>` | tokens_used, tokens_reserved, ttl |
-| Global usage | `GLOBAL` | `USAGE#<YYYY-MM-DD>` | tokens_used, ttl |
-| Invite code | `INVITE#<code>` | `META` | daily_budget, expires_at, uses |
+| Entity       | PK              | SK                   | Key attributes                               |
+| ------------ | --------------- | -------------------- | -------------------------------------------- |
+| User profile | `USER#<id>`     | `PROFILE`            | email, created_at, invite_code, daily_budget |
+| Song         | `USER#<id>`     | `SONG#<id>`          | title, body, updated_at                      |
+| Fragment     | `USER#<id>`     | `FRAG#<id>`          | text, tags, embedding (later), updated_at    |
+| User usage   | `USER#<id>`     | `USAGE#<YYYY-MM-DD>` | tokens_used, tokens_reserved, ttl            |
+| Global usage | `GLOBAL`        | `USAGE#<YYYY-MM-DD>` | tokens_used, ttl                             |
+| Invite code  | `INVITE#<code>` | `META`               | daily_budget, expires_at, uses               |
 
 Notes:
 
@@ -144,17 +144,17 @@ Every AI feature goes through **one checkpoint** in the back end. No route may c
 
 ### Layers of protection
 
-| Layer | Purpose |
-|---|---|
-| Per-user daily token budget | Stops one user from burning the budget |
-| Per-tool `max_tokens` and input caps | Bounds worst-case cost of a single call |
-| Global daily token cap (circuit breaker) | AI features pause when hit; everything else still works |
-| API Gateway throttling | Stops request floods |
-| Authentication required | No anonymous AI calls |
-| Invite codes | Recruiters get a bigger budget without opening the door for everyone |
-| AWS Budgets alarm | Email alert on unexpected AWS spend |
-| Anthropic console spend limit | Hard ceiling at the provider |
-| Cheapest adequate model per tool | Haiku for small tools, Sonnet only for drafts |
+| Layer                                    | Purpose                                                              |
+| ---------------------------------------- | -------------------------------------------------------------------- |
+| Per-user daily token budget              | Stops one user from burning the budget                               |
+| Per-tool `max_tokens` and input caps     | Bounds worst-case cost of a single call                              |
+| Global daily token cap (circuit breaker) | AI features pause when hit; everything else still works              |
+| API Gateway throttling                   | Stops request floods                                                 |
+| Authentication required                  | No anonymous AI calls                                                |
+| Invite codes                             | Recruiters get a bigger budget without opening the door for everyone |
+| AWS Budgets alarm                        | Email alert on unexpected AWS spend                                  |
+| Anthropic console spend limit            | Hard ceiling at the provider                                         |
+| Cheapest adequate model per tool         | Haiku for small tools, Sonnet only for drafts                        |
 
 ---
 
@@ -185,26 +185,26 @@ A lightweight evaluation set is a differentiator. Keep it small.
 
 ## 9. Open decisions (record each as an ADR in `docs/adr/`)
 
-| Decision | Options | Decide by |
-|---|---|---|
-| Claude access | Anthropic API directly vs. Amazon Bedrock | Week 3 |
-| Embeddings | Voyage AI vs. Amazon Bedrock embedding models (Claude does not produce embeddings) | Week 4 |
-| Repo location | Personal GitHub vs. company GitHub organization | Week 1 |
-| Domain name | Custom domain vs. default CloudFront URL | Week 5 |
-| License | MIT (permissive) is the default suggestion | Week 1 |
+| Decision      | Options                                                                            | Decide by |
+| ------------- | ---------------------------------------------------------------------------------- | --------- |
+| Claude access | Anthropic API directly vs. Amazon Bedrock                                          | Week 3    |
+| Embeddings    | Voyage AI vs. Amazon Bedrock embedding models (Claude does not produce embeddings) | Week 4    |
+| Repo location | Personal GitHub vs. company GitHub organization                                    | Week 1    |
+| Domain name   | Custom domain vs. default CloudFront URL                                           | Week 5    |
+| License       | MIT (permissive) is the default suggestion                                         | Week 1    |
 
 ---
 
 ## 10. Schedule (about 5 to 6 weeks, working around the job search)
 
-| Week | Goal | Done when |
-|---|---|---|
-| 1 | Repo, CDK infrastructure, Cognito sign-in, "hello world" deployed end to end | A signed-in user sees a page served from AWS that calls the API |
-| 2 | Songs and fragments CRUD, keyword search | User can save and find songs and fragments |
-| 3 | Metaphor tool and the token checkpoint (reserve, call, reconcile); MCP server exposing add/search fragments | Budget is enforced; 429 returned when exhausted. Claude can add and search fragments through the MCP server |
-| 4 | Embeddings, search by meaning, "draft a song from my fragments" | Draft uses relevant saved fragments |
-| 5 | Remaining tools, constraint-based ideas, near-rhymes, token meter, invite codes | All v1 features working |
-| 6 | Tests, eval set, architecture diagram, demo video, write-up | Portfolio deliverables complete |
+| Week | Goal                                                                                                        | Done when                                                                                                   |
+| ---- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| 1    | Repo, CDK infrastructure, Cognito sign-in, "hello world" deployed end to end                                | A signed-in user sees a page served from AWS that calls the API                                             |
+| 2    | Songs and fragments CRUD, keyword search                                                                    | User can save and find songs and fragments                                                                  |
+| 3    | Metaphor tool and the token checkpoint (reserve, call, reconcile); MCP server exposing add/search fragments | Budget is enforced; 429 returned when exhausted. Claude can add and search fragments through the MCP server |
+| 4    | Embeddings, search by meaning, "draft a song from my fragments"                                             | Draft uses relevant saved fragments                                                                         |
+| 5    | Remaining tools, constraint-based ideas, near-rhymes, token meter, invite codes                             | All v1 features working                                                                                     |
+| 6    | Tests, eval set, architecture diagram, demo video, write-up                                                 | Portfolio deliverables complete                                                                             |
 
 **Optional stretch:** split the UI into a small micro frontend (for example, the fragment browser as a separately deployed module) to demonstrate the pattern. Only after week 6.
 
