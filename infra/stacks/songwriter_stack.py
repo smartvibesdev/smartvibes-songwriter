@@ -14,10 +14,12 @@ from aws_cdk import (
     aws_dynamodb as dynamodb,
     aws_lambda as _lambda,
     aws_s3 as s3,
+    aws_s3_deployment as s3deploy,
 )
 from constructs import Construct
 
 BACKEND_DIR = Path(__file__).resolve().parents[2] / "backend"
+FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
 
 @jsii.implements(cdk.ILocalBundling)
@@ -120,7 +122,17 @@ class SongwriterStack(cdk.Stack):
                 ),
             ],
         )
-        # TODO: BucketDeployment of frontend/dist once the deploy step is agreed.
+        # Upload the built front end (run `npm run build` in frontend/ first).
+        # Skipped when there is no build, so `cdk synth` in CI still works.
+        if FRONTEND_DIST.is_dir():
+            s3deploy.BucketDeployment(
+                self,
+                "SiteDeployment",
+                sources=[s3deploy.Source.asset(str(FRONTEND_DIST))],
+                destination_bucket=site_bucket,
+                distribution=distribution,
+                distribution_paths=["/*"],
+            )
 
         # --- Lambda: FastAPI via Mangum ---
         api_fn = _lambda.Function(
