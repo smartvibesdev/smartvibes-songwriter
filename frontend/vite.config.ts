@@ -4,6 +4,6 @@ import { defineConfig } from 'vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  // Open the system default browser on `npm run dev` (instead of VS Code's built-in one).
-  server: { open: true },
+  // amazon-cognito-identity-js expects a Node-style `global`; browsers only have `globalThis`.
+  define: { global: 'globalThis' },
 })
