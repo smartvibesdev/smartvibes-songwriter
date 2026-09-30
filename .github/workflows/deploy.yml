@@ -1,13 +1,21 @@
 name: Deploy
 
+# Merging to main deploys dev. To deploy another environment, use
+# Actions > Deploy > Run workflow and pick dev, test or prod.
 on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        type: choice
+        options: [dev, test, prod]
+        default: dev
 
-# One deploy at a time; a newer push waits instead of cancelling a running deploy.
+# One deploy per environment at a time; a newer run waits instead of cancelling.
 concurrency:
-  group: deploy
+  group: deploy-${{ inputs.environment || 'dev' }}
   cancel-in-progress: false
 
 permissions:
@@ -17,10 +25,11 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Required reviewers are configured on this environment in GitHub
-    # (Settings > Environments > production), so each deploy waits for approval.
-    environment: production
+    # The GitHub environment (dev, test or prod) holds that environment's
+    # variables and its approval rule (Settings > Environments).
+    environment: ${{ inputs.environment || 'dev' }}
     env:
+      DEPLOY_ENV: ${{ inputs.environment || 'dev' }}
       # Public values (not secrets), set as environment variables in GitHub.
       VITE_API_URL: ${{ vars.VITE_API_URL }}
       VITE_COGNITO_USER_POOL_ID: ${{ vars.VITE_COGNITO_USER_POOL_ID }}
@@ -67,5 +76,5 @@ jobs:
         run: |
           npm install -g aws-cdk
           pip install -r requirements.txt
-          # Only the app stack; the GitHub access stack is deployed by hand.
-          cdk deploy SmartvibesSongwriter-dev --require-approval never
+          # Only this environment's app stack; the GitHub access stack is deployed by hand.
+          cdk deploy "SmartvibesSongwriter-$DEPLOY_ENV" -c env="$DEPLOY_ENV" --require-approval never

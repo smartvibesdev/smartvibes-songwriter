@@ -11,9 +11,9 @@ class GithubDeployStack(cdk.Stack):
     """Lets one GitHub Actions workflow deploy the app, with no stored AWS keys.
 
     GitHub proves its identity to AWS with a short-lived OIDC token. The role
-    below can be assumed only by workflows of `github_repo` that run in the
-    given GitHub *environment*, so a required-reviewer rule on that environment
-    acts as the approval gate.
+    below can be assumed only by workflows of `github_repo` that run in one of
+    the given GitHub *environments* (dev, test, prod), so a required-reviewer
+    rule on an environment acts as that environment's approval gate.
     """
 
     def __init__(
@@ -22,7 +22,7 @@ class GithubDeployStack(cdk.Stack):
         construct_id: str,
         *,
         github_repo: str,  # "owner/repo"
-        github_environment: str,
+        github_environments: list[str],
         **kwargs,
     ):
         super().__init__(scope, construct_id, **kwargs)
@@ -46,9 +46,10 @@ class GithubDeployStack(cdk.Stack):
                 conditions={
                     "StringEquals": {
                         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-                        "token.actions.githubusercontent.com:sub": (
-                            f"repo:{github_repo}:environment:{github_environment}"
-                        ),
+                        "token.actions.githubusercontent.com:sub": [
+                            f"repo:{github_repo}:environment:{name}"
+                            for name in github_environments
+                        ],
                     }
                 },
             ),

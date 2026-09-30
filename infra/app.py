@@ -30,7 +30,7 @@ GithubDeployStack(
     app,
     "SmartvibesSongwriter-github",
     github_repo="smartvibesdev/smartvibes-songwriter",
-    github_environment="production",
+    github_environments=["dev", "test", "prod"],
     env=aws_env,
 )
 
