@@ -14,10 +14,12 @@ from aws_cdk import (
     aws_dynamodb as dynamodb,
     aws_lambda as _lambda,
     aws_s3 as s3,
+    aws_s3_deployment as s3deploy,
 )
 from constructs import Construct
 
 BACKEND_DIR = Path(__file__).resolve().parents[2] / "backend"
+FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
 
 @jsii.implements(cdk.ILocalBundling)
@@ -120,7 +122,17 @@ class SongwriterStack(cdk.Stack):
                 ),
             ],
         )
-        # TODO: BucketDeployment of frontend/dist once the deploy step is agreed.
+        # Upload the built front end (run `npm run build` in frontend/ first).
+        # Skipped when there is no build, so `cdk synth` in CI still works.
+        if FRONTEND_DIST.is_dir():
+            s3deploy.BucketDeployment(
+                self,
+                "SiteDeployment",
+                sources=[s3deploy.Source.asset(str(FRONTEND_DIST))],
+                destination_bucket=site_bucket,
+                distribution=distribution,
+                distribution_paths=["/*"],
+            )
 
         # --- Lambda: FastAPI via Mangum ---
         api_fn = _lambda.Function(
@@ -160,17 +172,32 @@ class SongwriterStack(cdk.Stack):
                 allow_methods=[apigwv2.CorsHttpMethod.ANY],
                 allow_headers=["authorization", "content-type"],
             ),
-            default_authorizer=apigw_auth.HttpUserPoolAuthorizer(
-                "CognitoAuthorizer", user_pool, user_pool_clients=[user_pool_client]
-            ),
-            default_integration=apigw_int.HttpLambdaIntegration("ApiIntegration", api_fn),
         )
-        # /health is public; everything else requires a valid JWT.
+        # No $default route: a catch-all route would also match browser CORS
+        # preflight (OPTIONS) requests and demand a token, which browsers can't
+        # send. With none, API Gateway answers preflights itself from the CORS
+        # settings above.
+        # /health is public; every other path requires a valid Cognito JWT.
+        lambda_integration = apigw_int.HttpLambdaIntegration("ApiIntegration", api_fn)
         http_api.add_routes(
             path="/health",
             methods=[apigwv2.HttpMethod.GET],
-            integration=apigw_int.HttpLambdaIntegration("HealthIntegration", api_fn),
+            integration=lambda_integration,
             authorizer=apigwv2.HttpNoneAuthorizer(),
+        )
+        http_api.add_routes(
+            path="/{proxy+}",
+            methods=[
+                apigwv2.HttpMethod.GET,
+                apigwv2.HttpMethod.POST,
+                apigwv2.HttpMethod.PUT,
+                apigwv2.HttpMethod.PATCH,
+                apigwv2.HttpMethod.DELETE,
+            ],
+            integration=lambda_integration,
+            authorizer=apigw_auth.HttpUserPoolAuthorizer(
+                "CognitoAuthorizer", user_pool, user_pool_clients=[user_pool_client]
+            ),
         )
         # Request-flood protection (plan section 6). Tune later.
         default_stage = http_api.default_stage.node.default_child
