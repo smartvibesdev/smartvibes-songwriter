@@ -29,7 +29,8 @@ SongwriterStack(
 GithubDeployStack(
     app,
     "SmartvibesSongwriter-github",
-    github_repo="smartvibesdev/smartvibes-songwriter",
+    # The repo's name as it appears in GitHub's OIDC tokens (contains permanent IDs).
+    github_subject_prefix="repo:smartvibesdev@165607164/smartvibes-songwriter@1395969992",
     github_environments=["dev", "test", "prod"],
     env=aws_env,
 )

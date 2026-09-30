@@ -11,7 +11,7 @@ class GithubDeployStack(cdk.Stack):
     """Lets one GitHub Actions workflow deploy the app, with no stored AWS keys.
 
     GitHub proves its identity to AWS with a short-lived OIDC token. The role
-    below can be assumed only by workflows of `github_repo` that run in one of
+    below can be assumed only by workflows of this repo that run in one of
     the given GitHub *environments* (dev, test, prod), so a required-reviewer
     rule on an environment acts as that environment's approval gate.
     """
@@ -21,7 +21,10 @@ class GithubDeployStack(cdk.Stack):
         scope: Construct,
         construct_id: str,
         *,
-        github_repo: str,  # "owner/repo"
+        # The repo's name as GitHub writes it in its OIDC tokens. Newer repos use
+        # permanent IDs, e.g. "repo:owner@123/name@456". Get the exact value with:
+        #   gh api repos/OWNER/REPO/actions/oidc/customization/sub  (sub_claim_prefix)
+        github_subject_prefix: str,
         github_environments: list[str],
         **kwargs,
     ):
@@ -47,7 +50,7 @@ class GithubDeployStack(cdk.Stack):
                     "StringEquals": {
                         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
                         "token.actions.githubusercontent.com:sub": [
-                            f"repo:{github_repo}:environment:{name}"
+                            f"{github_subject_prefix}:environment:{name}"
                             for name in github_environments
                         ],
                     }
