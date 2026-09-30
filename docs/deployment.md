@@ -14,7 +14,31 @@ secrets belong in this file; values for the deployed stack live in
 | Resource naming | `smartvibes-songwriter-<env>-<resource>` |
 | Stateful resources | DynamoDB table and Cognito user pool are `RETAIN` (survive stack deletion) |
 
-## Daily workflow
+## Deploying with the script (temporary)
+
+> **Temporary.** `scripts/deploy.sh` is a stopgap until a GitHub Actions
+> workflow deploys automatically on merge to `main`. When that workflow
+> exists, this script and this section should be removed or reduced to a
+> break-glass fallback.
+
+Before deploying, merge your branch and update local `main`
+(`git checkout main && git pull`) so you deploy what is on `main`.
+
+```bash
+scripts/deploy.sh diff   # build the frontend, then preview only; changes nothing
+scripts/deploy.sh        # build the frontend, then cdk deploy
+```
+
+The script uses the `smartvibes-dev` profile, logs in through SSO if the
+session has expired, stops if `frontend/.env.local` is missing, builds
+`frontend/`, then runs `cdk` from `infra/` with its virtual environment on.
+`cdk deploy` still asks you to approve IAM (permission) changes; answer `y`
+after reading them.
+
+## Daily workflow (manual steps)
+
+What the script does, step by step. The frontend must be built first, because
+the stack uploads `frontend/dist` to the site bucket.
 
 ```bash
 # 1. Log in (SSO sessions last 8 hours)
@@ -23,7 +47,10 @@ aws sso login --profile smartvibes-dev
 # 2. Tell this terminal which profile to use (repeat in every new terminal window)
 export AWS_PROFILE=smartvibes-dev
 
-# 3. From infra/, with the venv active
+# 3. Build the frontend
+cd frontend && npm run build && cd ..
+
+# 4. From infra/, with the venv active
 cd infra && source .venv/bin/activate
 cdk diff      # preview changes, changes nothing
 cdk deploy    # apply; answer y to the IAM approval prompt
