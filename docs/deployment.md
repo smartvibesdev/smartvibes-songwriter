@@ -14,12 +14,50 @@ secrets belong in this file; values for the deployed stack live in
 | Resource naming | `smartvibes-songwriter-<env>-<resource>` |
 | Stateful resources | DynamoDB table and Cognito user pool are `RETAIN` (survive stack deletion) |
 
+## Automatic deploy (GitHub Actions)
+
+`.github/workflows/deploy.yml` deploys the app stack when something is merged
+to `main`. It signs in to AWS with a short-lived OIDC (OpenID Connect) token,
+so no AWS keys are stored in GitHub. The job runs in the GitHub environment
+`production`, which waits for a reviewer to approve each deploy.
+
+### One-time setup
+
+1. **Deploy the GitHub access stack** (creates the OIDC provider and the deploy
+   role in AWS; run by hand, from `infra/` with the venv active and your AWS
+   login):
+   ```bash
+   cdk deploy SmartvibesSongwriter-github
+   ```
+   Copy the `DeployRoleArn` output.
+2. **Create the environment** in GitHub: repo Settings > Environments > New
+   environment, named `production`. Under "Required reviewers", add yourself.
+3. **Add variables to that environment** (Settings > Environments > production
+   > Environment variables). None of these are secret:
+
+   | Variable | Value |
+   | -------- | ----- |
+   | `AWS_DEPLOY_ROLE_ARN` | `DeployRoleArn` from step 1 |
+   | `VITE_API_URL` | `ApiUrl` stack output |
+   | `VITE_COGNITO_USER_POOL_ID` | `UserPoolId` stack output |
+   | `VITE_COGNITO_CLIENT_ID` | `UserPoolClientId` stack output |
+   | `VITE_COGNITO_REGION` | `us-east-1` |
+
+### What happens on each merge
+
+The workflow waits for your approval, builds the frontend, then runs
+`cdk deploy SmartvibesSongwriter-dev --require-approval never`. Only the app
+stack is deployed; `SmartvibesSongwriter-github` is always deployed by hand.
+
+The role can only be assumed by this repo's workflows running in the
+`production` environment. Note that the CDK deploy role behind it can create
+anything CloudFormation can, so keep reviewer approval on.
+
 ## Deploying with the script (temporary)
 
-> **Temporary.** `scripts/deploy.sh` is a stopgap until a GitHub Actions
-> workflow deploys automatically on merge to `main`. When that workflow
-> exists, this script and this section should be removed or reduced to a
-> break-glass fallback.
+> **Fallback.** `scripts/deploy.sh` was a stopgap until the GitHub Actions
+> deploy above was set up. Once that works, remove this section or keep it
+> only as a break-glass option.
 
 Before deploying, merge your branch and update local `main`
 (`git checkout main && git pull`) so you deploy what is on `main`.
