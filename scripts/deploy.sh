@@ -35,7 +35,8 @@ echo "==> cdk $MODE"
 cd "$ROOT/infra"
 # shellcheck disable=SC1091
 source .venv/bin/activate
-cdk "$MODE"
+# Only the app stack; the GitHub access stack (SmartvibesSongwriter-github) is separate.
+cdk "$MODE" SmartvibesSongwriter-dev
 
 if [[ "$MODE" == "deploy" ]]; then
   echo "==> Done. Outputs are listed above (SiteUrl, ApiUrl, ...)."
