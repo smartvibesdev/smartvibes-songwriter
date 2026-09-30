@@ -63,10 +63,9 @@ the `dev`, `test` or `prod` environment of this repo may use. Copy the
    | `VITE_COGNITO_REGION`       | `us-east-1`                                  |
 
    For a brand-new environment, its stack outputs don't exist until the stack
-   has been deployed once. Deploy it the first time with
-   `cdk deploy SmartvibesSongwriter-<env> -c env=<env>` (or
-   `scripts/deploy.sh` for dev), copy the outputs into the variables, then use
-   the workflow from then on.
+   has been deployed once. Deploy it the first time by hand (see "Deploying by
+   hand" below), copy the outputs into the variables, then use the workflow
+   from then on.
 
 ### What happens on each deploy
 
@@ -81,30 +80,18 @@ The deploy role can only be assumed by this repo's workflows running in the
 can create anything CloudFormation can, so keep reviewer approval on,
 especially for `prod`.
 
-## Deploying with the script (temporary)
+## Deploying by hand
 
-> **Fallback.** `scripts/deploy.sh` was a stopgap until the GitHub Actions
-> deploy above was set up. Once that works, remove this section or keep it
-> only as a break-glass option.
+`scripts/new-env.sh <env>` runs the first-deploy steps for a new environment.
 
-Before deploying, merge your branch and update local `main`
-(`git checkout main && git pull`) so you deploy what is on `main`.
+Normally the workflow above deploys. Deploy by hand only for the **first**
+deploy of a new environment (its stack outputs don't exist yet, so the
+workflow's variables check would fail), or if GitHub Actions is down.
 
-```bash
-scripts/deploy.sh diff   # build the frontend, then preview only; changes nothing
-scripts/deploy.sh        # build the frontend, then cdk deploy
-```
-
-The script uses the `smartvibes-dev` profile, logs in through SSO if the
-session has expired, stops if `frontend/.env.local` is missing, builds
-`frontend/`, then runs `cdk` from `infra/` with its virtual environment on.
-`cdk deploy` still asks you to approve IAM (permission) changes; answer `y`
-after reading them.
-
-## Daily workflow (manual steps)
-
-What the script does, step by step. The frontend must be built first, because
-the stack uploads `frontend/dist` to the site bucket.
+The frontend must be built first, because the stack uploads `frontend/dist` to
+the site bucket. For a brand-new environment, skip the build and remove any old
+one (`rm -rf frontend/dist`) so another environment's values are not uploaded
+to the wrong site.
 
 ```bash
 # 1. Log in (SSO sessions last 8 hours)
@@ -113,14 +100,18 @@ aws sso login --profile smartvibes-dev
 # 2. Tell this terminal which profile to use (repeat in every new terminal window)
 export AWS_PROFILE=smartvibes-dev
 
-# 3. Build the frontend
+# 3. Build the frontend (skip for a brand-new environment; see above)
 cd frontend && npm run build && cd ..
 
-# 4. From infra/, with the venv active
+# 4. From infra/, with the venv active. Name the stack: a bare `cdk deploy`
+#    would also redeploy the GitHub access stack.
 cd infra && source .venv/bin/activate
-cdk diff      # preview changes, changes nothing
-cdk deploy    # apply; answer y to the IAM approval prompt
+cdk diff   SmartvibesSongwriter-dev -c env=dev   # preview, changes nothing
+cdk deploy SmartvibesSongwriter-dev -c env=dev   # apply; answer y to the IAM prompt
 ```
+
+Use the environment's name in place of `dev` for `test` or `prod`. Merge your
+branch and update local `main` first, so you deploy what is on `main`.
 
 ## Getting the deployed values back
 
