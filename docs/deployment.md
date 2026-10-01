@@ -32,7 +32,9 @@ environment does not exist yet; if added, give it its own account the same way.
 environment it is given. Each environment deploys into its **own AWS account**,
 through a role in that account:
 
-- **Merging to `main` deploys `dev` automatically, with no approval.**
+- **Merging to `main` deploys `dev` automatically, with no approval**, unless the
+  merge changes only docs (`docs/**`, any `.md` file, or `ci.yml`). A merge that
+  also changes any other file still deploys.
 - **To deploy another environment:** GitHub repo > Actions > Deploy > Run
   workflow, then pick `dev` or `prod` (`test` is in the list but has no account).
 

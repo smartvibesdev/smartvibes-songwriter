@@ -42,7 +42,9 @@ with AWS and AI tooling, not elaborate release engineering.
 
 ## Consequences
 
-- `dev` always reflects `main` shortly after a merge.
+- `dev` always reflects `main` shortly after a merge. A merge that changes only
+  docs (`docs/**`, `.md` files, the CI workflow file) does not start a deploy;
+  the Deploy workflow can still be run by hand for any environment.
 - `prod` only changes when the owner chooses and approves, and always from
   `main`.
 - Nothing on `dev` is reviewed before it deploys, so a bad merge reaches `dev`
