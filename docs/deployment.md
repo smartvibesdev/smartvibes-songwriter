@@ -32,7 +32,7 @@ environment does not exist yet; if added, give it its own account the same way.
 environment it is given. Each environment deploys into its **own AWS account**,
 through a role in that account:
 
-- **Merging to `main` deploys `dev`.**
+- **Merging to `main` deploys `dev` automatically, with no approval.**
 - **To deploy another environment:** GitHub repo > Actions > Deploy > Run
   workflow, then pick `dev` or `prod` (`test` is in the list but has no account).
 
@@ -40,7 +40,10 @@ It signs in to AWS with a short-lived OIDC (OpenID Connect) token, so no AWS
 keys are stored in GitHub. Each deploy runs in the GitHub _environment_ of the
 same name. The environment holds that environment's variables, including the
 ARN (Amazon Resource Name) of the deploy role in its account, and its approval
-rule (for example, you must approve before anything deploys to `prod`).
+rule: `dev` has none, so it deploys as soon as it starts; `prod` requires you to
+approve first. Only `main` may deploy to either (see
+[ADR 0006](adr/0006-deployment-flow-and-branching.md); there is no `develop`
+branch and feature branches do not deploy).
 
 ### One-time setup per account: bootstrap and deploy role
 
@@ -64,10 +67,11 @@ account number must match the account you intended.
 ### One-time setup per environment: GitHub environment and variables
 
 1. **Create the environment** in GitHub: repo Settings > Environments > New
-   environment, named `dev` or `prod`. Tick **Required reviewers**, add
-   yourself and **click Save protection rules**. Leave "Prevent self-review"
-   off. Do this before the first deploy; if GitHub creates the environment on
-   its own, it has no reviewer and would deploy without asking.
+   environment, named `dev` or `prod`. Under "Deployment branches and tags",
+   allow only `main`. For `prod`, also tick **Required reviewers**, add yourself
+   and **click Save protection rules**; leave "Prevent self-review" off. Leave
+   reviewers off for `dev`. Create `prod` before its first deploy: if GitHub
+   creates it on its own, it has no reviewer and would deploy without asking.
 2. **Add variables to that environment** (Settings > Environments > the
    environment > Environment variables). None are secret. The names are the
    same in every environment; the values differ:
@@ -88,16 +92,15 @@ account number must match the account you intended.
 
 ### What happens on each deploy
 
-The workflow waits for the environment's approval, checks that the variables
-are set, builds the frontend, then runs
+The workflow waits for the environment's approval (only `prod` has one), checks
+that the variables are set, builds the frontend, then runs
 `cdk deploy SmartvibesSongwriter-<env> -c env=<env> --require-approval never`
 in that environment's account. Only that environment's app stack is deployed;
 the `-github` stack is always deployed by hand.
 
 The deploy role can only be assumed by this repo's workflows running in its own
 GitHub environment. Note that the CDK deploy role behind it can create anything
-CloudFormation can in that account, so keep reviewer approval on, especially
-for `prod`.
+CloudFormation can in that account, so keep the reviewer approval on `prod`.
 
 ## Google sign-in setup
 
