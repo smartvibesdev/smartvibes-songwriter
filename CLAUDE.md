@@ -28,8 +28,25 @@ Songwriting companion app. See `docs/sv-songwriter-project-plan.md` for the plan
 | `docs/`     | Plan, ADRs, `development.md`, `deployment.md` | Markdown                               |
 
 - Python commands (`pytest`, `ruff`, `uvicorn`, `cdk`) need the folder's virtual environment: `source .venv/bin/activate`. Each Python folder has its own.
-- Checks that CI runs: backend `ruff check .`, `ruff format --check .`, `pytest`; frontend `npm run lint`, `npm run build`; infra `python app.py` (synth).
+- Checks that CI runs: backend `ruff check .`, `ruff format --check .`, `pytest`; frontend `npm run lint`, `npm run format:check`, `npm run build`; infra `python app.py` (synth).
 - See `docs/development.md` for setup and `docs/deployment.md` for AWS operations.
+
+## TypeScript style (`frontend/`)
+
+Formatting is automatic: Prettier with no semicolons, single quotes and a 120-character line width, otherwise default settings (so trailing commas). Run `npm run format` to fix and `npm run format:check` to verify; both cover `src/`. The structure rules below are checked by `oxlint` where it can (`curly`, `no-negated-condition`, `eqeqeq`) and by review otherwise.
+
+1. **No single-line `if` statements.** The body always goes on its own line, inside braces.
+2. **Always use braces** on `if`, `else`, `for`, `while`, `do` and similar. Never `if (x) return y` and never `for (...) doIt()`.
+3. **Put whitespace between lines of logic.** Group related statements, then leave a blank line before the next group. Every `if`/`for`/`while`/`try`/`switch` block gets a blank line before and after it (unless it is the first or last thing in its block). A `return` after other statements gets a blank line before it. Declarations are separated from the logic that uses them. Do not write dense runs of statements or deeply packed one-liners; give a long expression a named variable.
+4. **Use positive logic.** Test for the thing you want, not for its opposite.
+   - Do not use `!`, `!==` or `!=` in conditions when a positive form exists. Write `if (response.ok)`, not `if (!response.ok)`; use `Boolean(x)` where you need a boolean from a value.
+   - Checking for absence with `=== null` or `=== undefined` is positive and fine, for example a guard such as `if (token === null) { throw ... }`.
+   - The one accepted exception is dropping an item from a collection, which has no positive form: keep `items.filter((item) => item.id !== id)` inside the small named helper `removeById` (`src/lists.ts`) and call that.
+   - Never write `if (!a) { ... } else { ... }` or `a !== b ? x : y`. Swap the branches.
+   - Put the main case inside the positive `if` and the failure or fallback after it.
+   - If a condition is hard to read, name it: `const isFresh = expiresAt - now > 60_000`.
+
+Also: keep functions small and single-purpose (split anything that parses, branches and formats in one body); avoid nested ternaries (use a lookup object or `if` blocks); give variables full names (`response`, not `r`).
 
 ## AWS
 

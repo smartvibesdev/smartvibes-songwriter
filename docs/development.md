@@ -91,8 +91,11 @@ uvicorn app.main:app --reload
 Open <http://localhost:8000/health>. You should see `{"status":"ok"}`.
 Interactive API docs are at <http://localhost:8000/docs>. Stop it with Ctrl+C.
 
-Note: `/me` returns 401 when run locally, because the login check is done by
-AWS API Gateway, which is not present on your computer.
+Note: `/me`, `/songs`, `/fragments` and `/search` all return 401 when run
+locally, because the login check is done by AWS API Gateway, which is not
+present on your computer. The tests (`pytest`) cover those routes with a
+simulated login and a fake DynamoDB, so you do not need AWS to run them. To try
+the real routes, deploy to `dev` and call them with a signed-in token.
 
 ### Run the frontend locally
 
@@ -121,11 +124,16 @@ ruff format --check .      # or `ruff format .` to fix formatting
 cd frontend
 npm run lint
 npm run build
+npm run format:check       # or `npm run format` to fix (Prettier)
 
 # Infrastructure (confirms the stack still builds; touches nothing in AWS)
 cd infra && source .venv/bin/activate
 python app.py
 ```
+
+TypeScript code style (Prettier settings and the rules for `if`, braces, blank
+lines and positive logic) is in the "TypeScript style" section of
+[CLAUDE.md](../CLAUDE.md).
 
 ## Deploying to AWS
 
