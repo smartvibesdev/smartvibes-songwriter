@@ -1,10 +1,16 @@
 name: Deploy
 
-# Merging to main deploys dev. To deploy another environment, use
-# Actions > Deploy > Run workflow and pick dev or prod.
+# Merging to main deploys dev, unless the merge changes only docs. To deploy any
+# environment on demand, use Actions > Deploy > Run workflow and pick dev or prod.
 on:
   push:
     branches: [main]
+    # A merge that touches only these files does not deploy. A merge that also
+    # changes any other file still does.
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - ".github/workflows/ci.yml"
   workflow_dispatch:
     inputs:
       environment:
