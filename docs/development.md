@@ -129,10 +129,10 @@ python app.py
 
 ## Deploying to AWS
 
-See [deployment.md](deployment.md). In short: log in with
-`aws sso login --profile smartvibes-dev`, set `export AWS_PROFILE=smartvibes-dev`,
-build the frontend (`npm run build` in `frontend/`), then in `infra/` with the
-virtual environment active run `cdk diff` and `cdk deploy`.
+See [deployment.md](deployment.md). Normally you do not deploy by hand:
+merging to `main` deploys `dev` through GitHub Actions, and you run the Deploy
+workflow from the Actions tab to deploy `prod`. Each environment lives in its own
+AWS account (profiles `smartvibes-dev` and `smartvibes-prod`).
 
 ## Making changes (Git)
 

@@ -26,20 +26,28 @@ No account IDs, keys or tokens are recorded here. `<account-id>` means your
 | **MFA** | Multi-factor authentication: a second login step from an authenticator app. |
 | **OIDC** | OpenID Connect: lets GitHub prove its identity to AWS with a short-lived token, so no AWS keys are stored in GitHub. |
 | **PR** | Pull request. |
-| **Stack** | A group of AWS resources created, updated and deleted together as one unit by CloudFormation. This project has one stack per environment (`SmartvibesSongwriter-dev`, `SmartvibesSongwriter-prod`), plus `SmartvibesSongwriter-github` (the GitHub deploy role) and `CDKToolkit` (the bootstrap). |
+| **Stack** | A group of AWS resources created, updated and deleted together as one unit by CloudFormation. This project has one stack per environment, each in its own AWS account (`SmartvibesSongwriter-dev`, `SmartvibesSongwriter-prod`). Each account also has `SmartvibesSongwriter-github` (the GitHub deploy role) and `CDKToolkit` (the bootstrap). |
 | **SSO** | Single sign-on; here AWS IAM Identity Center. |
 
 ## Where things stand
 
-- **Region:** `us-east-1`. **Account:** one AWS account, named "Smart Vibes".
-- **Environments:** `dev` (stack `SmartvibesSongwriter-dev`) and `prod` (stack
-  `SmartvibesSongwriter-prod`) both exist, in the same account and region.
-  `test` is not created yet; see "Adding an environment".
+- **Region:** `us-east-1`. **Accounts:** three, in one AWS Organization (see
+  "Separate AWS accounts" below): management (organization and Identity Center
+  only), `smartvibes-dev` and `smartvibes-prod`.
+- **Environments:** `dev` and `prod`, each a stack in its own account. `test`
+  does not exist.
 - **Deploys:** merging to `main` starts the Deploy workflow for `dev`, which
-  waits for your approval in GitHub, then deploys.
-- **Sign-in:** email and password through Amazon Cognito. Google sign-in is not
-  done yet.
+  waits for your approval in GitHub, then deploys. `prod` is deployed by
+  running the workflow by hand.
+- **Sign-in:** email and password through Amazon Cognito, one user pool per
+  environment. Google sign-in is not done yet.
 - **Live check:** `GET <ApiUrl>/health` returns `{"status":"ok"}`.
+
+> Sections 1 to 9 below were written when everything lived in the one account
+> that is now the management account, and describe that first setup. The
+> profile created in section 4 was named `smartvibes-dev`; it has since been
+> renamed `smartvibes-mgmt`, and `smartvibes-dev` now means the dev account.
+> The final layout is in "Separate AWS accounts".
 
 ## 1. AWS account
 
@@ -227,7 +235,7 @@ table.
 How it works: GitHub gives the job a short-lived OIDC token. AWS has an OIDC
 provider for GitHub and one IAM role
 (`smartvibes-songwriter-github-deploy`) that trusts tokens from this repo's
-`dev`, `test` and `prod` GitHub environments. The role only assumes CDK's own
+GitHub environment of the same name (each account trusts only its own). The role only assumes CDK's own
 bootstrap roles, which do the real work.
 
 One-time setup, in this order (**all before the first merge that adds the
@@ -249,13 +257,16 @@ workflow**, because the merge itself starts a deploy):
 
 ## Seeing the environments in the AWS console
 
-`dev` and `prod` are in the same AWS account and region (`us-east-1`), so one
-sign-in shows both.
+`dev` and `prod` are in **different AWS accounts** (same region, `us-east-1`).
+One sign-in covers all of them, but you open the console for one account at a
+time: to see `dev`, open the `smartvibes-dev` account; to see `prod`, open
+`smartvibes-prod`. The management account shows neither environment.
 
 1. Open your full access portal address (`https://d-xxxxxxxxxx.awsapps.com/start`),
-   sign in as your Identity Center user, click the account, then
-   **Management console** next to `AdministratorAccess`. Do not use the root
-   login for this.
+   sign in as your Identity Center user, click the account you want
+   (`smartvibes-dev` or `smartvibes-prod`), then **AdministratorAccess**. The
+   console shows the account name and ID at the top right; check it before you
+   change anything. Do not use the root login for this.
 2. Check the region selector (top right) says **N. Virginia (us-east-1)**.
    Resources only appear in the region where they were created.
 3. Search for **CloudFormation**. Each environment is one stack. Click a stack,
@@ -274,6 +285,8 @@ sign-in shows both.
 | `No AWS accounts are available to you` from `aws configure sso` | The permission set was created but never assigned to the account | Identity Center > AWS accounts > Assign users or groups |
 | `The config profile (smartvibes-dev) could not be found` | The earlier SSO setup had not finished, so no profile was written | Finish `aws configure sso` |
 | `zsh: command not found: uvicorn` (or `pytest`, `ruff`) | Virtual environment not active | `source .venv/bin/activate` in that folder |
+| Console search for "IAM" opens the wrong service, or the region says Global | IAM is separate from IAM Identity Center | Search for the full name `IAM Identity Center` and check the region is N. Virginia |
+| Site address shows an XML `AccessDenied` page after a first deploy | The site bucket is empty; `scripts/new-env.sh` deploys without a frontend | Run the Deploy workflow once for that environment |
 | Opening `awsapps.com/start` shows an XML `AccessDenied` error | The address is missing the directory ID | Use the full `https://d-xxxxxxxxxx.awsapps.com/start` from Identity Center > Settings |
 | `ReferenceError: global is not defined`, blank page in the browser | `amazon-cognito-identity-js` expects Node's `global` | `define: { global: 'globalThis' }` in `frontend/vite.config.ts` |
 | Browser CORS error calling `/me`; preflight (OPTIONS) returns 401 | A catch-all route with a token check also caught the browser's OPTIONS preflight | Explicit routes (`/health` public, `/{proxy+}` protected) and no `$default` route, so API Gateway answers preflights itself |
@@ -284,41 +297,98 @@ sign-in shows both.
 | `cdk` prints a "not tested with node v26" box | Homebrew installed Node 26; CDK's Python layer supports 20, 22 and 24 | Harmless. Switch to Node 24 if it ever breaks |
 | `git pull` fails with "Permission denied (publickey)" from a sandboxed tool | SSH key not available in that context | Run `git pull` in your own terminal |
 
-## Adding an environment (test or prod)
+## Separate AWS accounts (current layout)
 
-`dev` and `prod` exist (`prod` was created on 2026-09-30 with
-`scripts/new-env.sh prod`, then deployed again through the workflow). `test` is
-not created yet. The stack code supports any of them: the environment name sets the stack name and every resource name, so
-`-c env=prod` produces `SmartvibesSongwriter-prod` with its own table, user
-pool, API and site. They share the one AWS account for now (separate accounts
-would be stricter for prod but need their own bootstrap and SSO assignment).
+Done on 2026-09-30, after first deploying `dev` and `prod` into the single
+account. Moved to separate accounts before any real users existed, because a
+Cognito user pool cannot be moved between accounts: users would have to
+re-register.
 
-Checklist (written for `prod`; the same steps apply to `test`):
+| Account | Profile | Holds |
+| ------- | ------- | ----- |
+| Management ("Smart Vibes") | `smartvibes-mgmt` | Organization, Identity Center, `CDKToolkit` only |
+| `smartvibes-dev` | `smartvibes-dev` | `dev` environment |
+| `smartvibes-prod` | `smartvibes-prod` | `prod` environment |
 
-0. **Shortcut for step 1 and the values in step 2:** from the repo root on an
-   up-to-date `main`, run `scripts/new-env.sh prod`. It logs you in if needed,
-   removes `frontend/dist`, shows the diff, asks before deploying, deploys, and
-   prints the variables to add in GitHub. The manual steps below are what it does.
-1. **Deploy the stack by hand the first time.** Its outputs do not exist yet,
-   so the workflow's variables check would fail. Build no frontend first
-   (`rm -rf frontend/dist`) so `dev`'s values are not uploaded to the wrong
-   site. From `infra/` with the environment on:
-   `cdk deploy SmartvibesSongwriter-prod -c env=prod`. The workflow cannot do
-   this first deploy, because its variables do not exist yet.
-2. Copy the new `ApiUrl`, `UserPoolId` and `UserPoolClientId` outputs.
-3. In GitHub, create the `prod` environment with yourself as a required
-   reviewer (save it) and add the same five variable names with prod's values
-   and the same `AWS_DEPLOY_ROLE_ARN`.
-4. Run **Actions > Deploy > Run workflow**, choose `prod`, approve. This
-   builds the frontend with prod's values and uploads it.
-5. Sign up a test user on the prod `SiteUrl` and click **Call /me**.
-6. Repeat for `test` if wanted.
+Steps, in order:
 
-Adding `prod` this way worked as written: the first deploy by script, then the
-five variables on the GitHub environment, then a manual workflow run.
+1. **Create the member accounts.** Console > search **AWS Organizations** >
+   AWS accounts > Add an AWS account > Create an AWS account. Name
+   `smartvibes-dev`, then `smartvibes-prod`. Each needs its own unique email.
+   Plus addressing works with Gmail-hosted mail:
+   `jeff+sv-dev@<domain>` and `jeff+sv-prod@<domain>`. Leave the IAM role name
+   at its default (`OrganizationAccountAccessRole`). Creation runs in the
+   background for a few minutes.
+2. **Give yourself access.** Console > search **IAM Identity Center** (not
+   "IAM") > AWS accounts > tick both new accounts > Assign users or groups >
+   your user > `AdministratorAccess` > Submit. The access portal then lists
+   three accounts.
+3. **Add CLI profiles** to `~/.aws/config`, all with the same
+   `sso_session = smartvibes` and `sso_role_name = AdministratorAccess`:
+   rename the old `smartvibes-dev` block to `smartvibes-mgmt`, and add
+   `smartvibes-dev` and `smartvibes-prod` with the new accounts' IDs. Check each
+   with `aws sts get-caller-identity --profile <name>` and compare the account
+   ID.
+4. **Bootstrap each new account:**
+   `cdk bootstrap aws://<account-id>/us-east-1 --profile smartvibes-dev` and
+   the same for prod.
+5. **Deploy the GitHub access stack in each account**, so each has its own OIDC
+   provider and deploy role trusting only its own environment:
+   `cdk deploy SmartvibesSongwriter-github -c env=dev --profile smartvibes-dev`,
+   and `-c env=prod --profile smartvibes-prod`. Copy each `DeployRoleArn` and
+   check its account number.
+6. **Set the GitHub environment variable** `AWS_DEPLOY_ROLE_ARN` on `dev` and
+   on `prod` to that account's role.
+7. **First deploy into each account** with `scripts/new-env.sh dev` and
+   `scripts/new-env.sh prod` (from an up-to-date `main`). It prints the new
+   `VITE_*` values. Put them in the GitHub environments.
+8. **Run the Deploy workflow** for `dev` and for `prod`, approving each. This
+   uploads the site; before this the site address shows an S3 `AccessDenied`
+   XML page because the bucket is empty. The runs can go at the same time.
+9. **Test:** sign up on each new site and click **Call /me**.
+10. **Clean up the old management-account stacks.**
+    `aws cloudformation delete-stack` for the old `-dev`, `-prod` and `-github`
+    stacks with `--profile smartvibes-mgmt`. The `RETAIN` DynamoDB tables and
+    Cognito user pools survive stack deletion and have to be deleted by hand
+    (`aws dynamodb delete-table`, `aws cognito-idp delete-user-pool`). Check the
+    account ID first so you delete in the right one. `CDKToolkit` was left in
+    place.
+
+Gotchas from this migration:
+
+- `scripts/new-env.sh` defaulted to the old profile at first and would have
+  created `prod` in the dev account. It now derives the profile from the
+  environment name.
+- Merging a PR starts the Deploy workflow for `dev`. While the GitHub
+  variables still pointed at old values, that run had to be rejected (Review
+  deployments > Reject) so it didn't deploy the wrong thing.
+- `-c env=prod` only works through the `cdk` command. A plain `python app.py
+  -c env=prod` ignores it; use `CDK_CONTEXT_JSON='{"env":"prod"}'` to test a
+  synth that way.
+- Identity Center is a different service from IAM. Searching "IAM" finds the
+  wrong console.
+- The console may open in the wrong region after an SSO sign-in. Fix: gear icon
+  > See all user settings > Localization and default Region > Edit > N.
+  Virginia > Save.
+
+## Adding an environment (test)
+
+`dev` and `prod` exist, each in its own account. `test` does not. To add it,
+repeat "Separate AWS accounts" for a new account named `smartvibes-test` with
+its own email, plus a `smartvibes-test` profile. Then:
+
+1. Bootstrap the account and deploy `SmartvibesSongwriter-github -c env=test`
+   there (steps 4 and 5 above).
+2. Create the GitHub environment `test` with yourself as a required reviewer
+   (save it), and set `AWS_DEPLOY_ROLE_ARN`.
+3. `scripts/new-env.sh test`, then add the printed `VITE_*` values to the `test`
+   environment.
+4. Run **Actions > Deploy > Run workflow**, choose `test`, approve.
+5. Sign up a test user on the `test` `SiteUrl` and click **Call /me**.
 
 ## Next
 
-- Google sign-in (needs a Google OAuth client; see the plan).
+- Google sign-in (needs a Google OAuth client; see the plan). Because each
+  environment has its own Cognito user pool, it has to be set up in both.
 - ADR for repo location (is `smartvibesdev` personal or company GitHub).
 - Week 2: songs and fragments.

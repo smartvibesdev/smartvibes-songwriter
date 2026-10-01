@@ -33,7 +33,8 @@ Songwriting companion app. See `docs/sv-songwriter-project-plan.md` for the plan
 
 ## AWS
 
-- Region `us-east-1`. Use the SSO profile `smartvibes-dev` (`export AWS_PROFILE=smartvibes-dev`; log in with `aws sso login --profile smartvibes-dev`).
-- CDK stack `SmartvibesSongwriter-dev`. Resource names follow `smartvibes-songwriter-<env>-<resource>`. The DynamoDB table and Cognito user pool use `RETAIN`.
-- Real Cognito and API values live in the git-ignored `frontend/.env.local`. Never commit secrets, API keys, or `.env.local`.
+- Region `us-east-1`. Three AWS accounts in one Organization, one SSO session, three CLI profiles: `smartvibes-mgmt` (organization and Identity Center only, no app resources), `smartvibes-dev` (the `dev` environment) and `smartvibes-prod` (the `prod` environment). Log in with `aws sso login --profile smartvibes-dev`. Check which account a profile points at with `aws sts get-caller-identity --profile <name>` before changing anything.
+- One CDK stack per environment, in its own account: `SmartvibesSongwriter-dev`, `SmartvibesSongwriter-prod`. Each account also has a `SmartvibesSongwriter-github` stack (GitHub deploy role; deploy with `-c env=<env>`). Resource names follow `smartvibes-songwriter-<env>-<resource>`. The DynamoDB table and Cognito user pool use `RETAIN`.
+- Deploys normally run through the GitHub Deploy workflow (merge to `main` deploys `dev`; run it by hand for `prod`). Use `scripts/new-env.sh <env>` only for the first deploy of an environment. Never deploy to the wrong account: always pass the matching `--profile`.
+- Real Cognito and API values live in the git-ignored `frontend/.env.local` (points at `dev`). Never commit secrets, API keys, or `.env.local`.
 - Every AI call must go through the token-budget checkpoint described in the plan. No route may call the Anthropic API directly.
