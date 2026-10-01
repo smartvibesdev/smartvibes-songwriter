@@ -24,14 +24,17 @@ SongwriterStack(
     env=aws_env,
 )
 
-# Account-level setup that lets GitHub Actions deploy. Deployed separately, by hand:
-#   cdk deploy SmartvibesSongwriter-github
+# Account-level setup that lets GitHub Actions deploy into one AWS account.
+# Each environment lives in its own account, so the role in that account trusts
+# only that environment's GitHub workflows. Deployed once per account, by hand:
+#   cdk deploy SmartvibesSongwriter-github -c env=dev  --profile smartvibes-dev
+#   cdk deploy SmartvibesSongwriter-github -c env=prod --profile smartvibes-prod
 GithubDeployStack(
     app,
     "SmartvibesSongwriter-github",
     # The repo's name as it appears in GitHub's OIDC tokens (contains permanent IDs).
     github_subject_prefix="repo:smartvibesdev@165607164/smartvibes-songwriter@1395969992",
-    github_environments=["dev", "test", "prod"],
+    github_environments=[env_name],
     env=aws_env,
 )
 

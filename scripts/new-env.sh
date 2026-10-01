@@ -16,7 +16,10 @@ fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STACK="SmartvibesSongwriter-$ENV_NAME"
-export AWS_PROFILE="${AWS_PROFILE:-smartvibes-dev}"
+# Each environment has its own AWS account and profile (smartvibes-dev, smartvibes-prod).
+# Always derived from the environment name, so a leftover AWS_PROFILE in your
+# shell cannot send prod to the dev account.
+export AWS_PROFILE="smartvibes-$ENV_NAME"
 
 cd "$ROOT"
 if [[ "$(git branch --show-current)" != "main" ]]; then

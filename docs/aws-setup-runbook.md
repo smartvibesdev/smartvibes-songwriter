@@ -20,18 +20,21 @@ No account IDs, keys or tokens are recorded here. `<account-id>` means your
 | **CDK** | AWS Cloud Development Kit: defines AWS resources as Python code (`infra/`). |
 | **CI** | Continuous integration: the automatic checks GitHub runs on every pull request (`.github/workflows/ci.yml`). |
 | **CLI** | Command-line interface; here the `aws` and `cdk` commands. |
+| **CloudFormation** | AWS's built-in service for creating and managing resources from a template. CDK generates the template, CloudFormation builds it. Its console page is the best overview of what this project created. |
 | **CORS** | Cross-origin resource sharing: the browser rule controlling which websites may call an API. |
 | **IAM** | Identity and Access Management: AWS users, roles and permissions. |
 | **MFA** | Multi-factor authentication: a second login step from an authenticator app. |
 | **OIDC** | OpenID Connect: lets GitHub prove its identity to AWS with a short-lived token, so no AWS keys are stored in GitHub. |
 | **PR** | Pull request. |
+| **Stack** | A group of AWS resources created, updated and deleted together as one unit by CloudFormation. This project has one stack per environment (`SmartvibesSongwriter-dev`, `SmartvibesSongwriter-prod`), plus `SmartvibesSongwriter-github` (the GitHub deploy role) and `CDKToolkit` (the bootstrap). |
 | **SSO** | Single sign-on; here AWS IAM Identity Center. |
 
 ## Where things stand
 
 - **Region:** `us-east-1`. **Account:** one AWS account, named "Smart Vibes".
-- **Environments:** only `dev` exists so far (stack `SmartvibesSongwriter-dev`).
-  `test` and `prod` are planned; see "Adding an environment".
+- **Environments:** `dev` (stack `SmartvibesSongwriter-dev`) and `prod` (stack
+  `SmartvibesSongwriter-prod`) both exist, in the same account and region.
+  `test` is not created yet; see "Adding an environment".
 - **Deploys:** merging to `main` starts the Deploy workflow for `dev`, which
   waits for your approval in GitHub, then deploys.
 - **Sign-in:** email and password through Amazon Cognito. Google sign-in is not
@@ -82,7 +85,11 @@ Used instead of long-lived access keys.
    reports "No AWS accounts are available to you".
 6. Accept the invitation email, set a password and register MFA for this user.
 7. Copy the **AWS access portal URL** from Identity Center > Settings. It looks
-   like `https://d-xxxxxxxxxx.awsapps.com/start`.
+   like `https://d-xxxxxxxxxx.awsapps.com/start`. **The `d-xxxxxxxxxx.` part
+   is required.** The bare `awsapps.com/start` shows an "AccessDenied" XML
+   error. Bookmark the full address: it is how you sign in to the AWS console
+   (see "Seeing the environments in the AWS console"). You can also find it with
+   `grep sso_start_url ~/.aws/config`.
 
 ## 4. Local tooling
 
@@ -240,6 +247,26 @@ workflow**, because the merge itself starts a deploy):
 4. Merge. The run waits at "Waiting for review": open it, **Review
    deployments**, tick the environment, **Approve and deploy**.
 
+## Seeing the environments in the AWS console
+
+`dev` and `prod` are in the same AWS account and region (`us-east-1`), so one
+sign-in shows both.
+
+1. Open your full access portal address (`https://d-xxxxxxxxxx.awsapps.com/start`),
+   sign in as your Identity Center user, click the account, then
+   **Management console** next to `AdministratorAccess`. Do not use the root
+   login for this.
+2. Check the region selector (top right) says **N. Virginia (us-east-1)**.
+   Resources only appear in the region where they were created.
+3. Search for **CloudFormation**. Each environment is one stack. Click a stack,
+   then **Resources** for everything it created (each row links to that
+   resource's console page) and **Outputs** for its URLs and IDs.
+4. Individual services also list them, with the environment in the name:
+   DynamoDB tables (`smartvibes-songwriter-<env>-table`), Lambda functions
+   (`...-<env>-api`), Cognito user pools, API Gateway APIs and CloudFront
+   distributions. S3 site buckets have generated names; use the stack's
+   Resources tab to find them.
+
 ## 10. Problems hit, and the fixes
 
 | Symptom | Cause | Fix |
@@ -247,6 +274,7 @@ workflow**, because the merge itself starts a deploy):
 | `No AWS accounts are available to you` from `aws configure sso` | The permission set was created but never assigned to the account | Identity Center > AWS accounts > Assign users or groups |
 | `The config profile (smartvibes-dev) could not be found` | The earlier SSO setup had not finished, so no profile was written | Finish `aws configure sso` |
 | `zsh: command not found: uvicorn` (or `pytest`, `ruff`) | Virtual environment not active | `source .venv/bin/activate` in that folder |
+| Opening `awsapps.com/start` shows an XML `AccessDenied` error | The address is missing the directory ID | Use the full `https://d-xxxxxxxxxx.awsapps.com/start` from Identity Center > Settings |
 | `ReferenceError: global is not defined`, blank page in the browser | `amazon-cognito-identity-js` expects Node's `global` | `define: { global: 'globalThis' }` in `frontend/vite.config.ts` |
 | Browser CORS error calling `/me`; preflight (OPTIONS) returns 401 | A catch-all route with a token check also caught the browser's OPTIONS preflight | Explicit routes (`/health` public, `/{proxy+}` protected) and no `$default` route, so API Gateway answers preflights itself |
 | Clicked `localhost` links open inside VS Code instead of Chrome | VS Code setting "Workbench > Browser: Open Localhost Links" | Untick it in Settings |
@@ -258,13 +286,14 @@ workflow**, because the merge itself starts a deploy):
 
 ## Adding an environment (test or prod)
 
-Not done yet. `dev` is the only environment. The stack code already supports
-more: the environment name sets the stack name and every resource name, so
+`dev` and `prod` exist (`prod` was created on 2026-09-30 with
+`scripts/new-env.sh prod`, then deployed again through the workflow). `test` is
+not created yet. The stack code supports any of them: the environment name sets the stack name and every resource name, so
 `-c env=prod` produces `SmartvibesSongwriter-prod` with its own table, user
 pool, API and site. They share the one AWS account for now (separate accounts
 would be stricter for prod but need their own bootstrap and SSO assignment).
 
-Checklist for `prod`:
+Checklist (written for `prod`; the same steps apply to `test`):
 
 0. **Shortcut for step 1 and the values in step 2:** from the repo root on an
    up-to-date `main`, run `scripts/new-env.sh prod`. It logs you in if needed,
@@ -285,9 +314,11 @@ Checklist for `prod`:
 5. Sign up a test user on the prod `SiteUrl` and click **Call /me**.
 6. Repeat for `test` if wanted.
 
+Adding `prod` this way worked as written: the first deploy by script, then the
+five variables on the GitHub environment, then a manual workflow run.
+
 ## Next
 
 - Google sign-in (needs a Google OAuth client; see the plan).
-- Add the `prod` environment (above), before starting Week 2.
 - ADR for repo location (is `smartvibesdev` personal or company GitHub).
 - Week 2: songs and fragments.
