@@ -13,3 +13,4 @@ Format: [0000-template.md](0000-template.md)
 | [0002](0002-mit-license.md) | License the project under MIT | Accepted |
 | [0003](0003-separate-aws-accounts-per-environment.md) | One AWS account per environment | Accepted |
 | [0004](0004-repo-under-company-github-account.md) | Host the repository under the company GitHub account | Accepted |
+| [0005](0005-google-sign-in-through-cognito.md) | Google sign-in through Cognito's hosted domain | Accepted |

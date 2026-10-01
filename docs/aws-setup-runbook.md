@@ -24,8 +24,11 @@ No account IDs, keys or tokens are recorded here. `<account-id>` means your
 | **CORS** | Cross-origin resource sharing: the browser rule controlling which websites may call an API. |
 | **IAM** | Identity and Access Management: AWS users, roles and permissions. |
 | **MFA** | Multi-factor authentication: a second login step from an authenticator app. |
+| **OAuth** | The standard protocol behind "Sign in with Google": the browser is sent to Google, then back to the app with a one-time code that is exchanged for tokens. |
 | **OIDC** | OpenID Connect: lets GitHub prove its identity to AWS with a short-lived token, so no AWS keys are stored in GitHub. |
+| **PKCE** | Proof Key for Code Exchange: a one-time secret generated in the browser for each OAuth sign-in, so an intercepted code is useless to anyone else. |
 | **PR** | Pull request. |
+| **Secrets Manager** | AWS's store for secrets such as the Google client secret. The stack reads it at deploy time; nothing secret is in the repo. |
 | **Stack** | A group of AWS resources created, updated and deleted together as one unit by CloudFormation. This project has one stack per environment, each in its own AWS account (`SmartvibesSongwriter-dev`, `SmartvibesSongwriter-prod`). Each account also has `SmartvibesSongwriter-github` (the GitHub deploy role) and `CDKToolkit` (the bootstrap). |
 | **SSO** | Single sign-on; here AWS IAM Identity Center. |
 
@@ -39,8 +42,8 @@ No account IDs, keys or tokens are recorded here. `<account-id>` means your
 - **Deploys:** merging to `main` starts the Deploy workflow for `dev`, which
   waits for your approval in GitHub, then deploys. `prod` is deployed by
   running the workflow by hand.
-- **Sign-in:** email and password through Amazon Cognito, one user pool per
-  environment. Google sign-in is not done yet.
+- **Sign-in:** email and password, or Google, through Amazon Cognito, one user
+  pool per environment (see section 6 and ADR 0005).
 - **Live check:** `GET <ApiUrl>/health` returns `{"status":"ok"}`.
 
 > Sections 1 to 9 below were written when everything lived in the one account
@@ -194,8 +197,57 @@ verified. Test by opening the `SiteUrl`, signing up, confirming the emailed
 code, signing in and clicking **Call /me**. You should see `200` and your user
 ID and email.
 
-Google sign-in is not set up yet. It needs a Google OAuth client and a
-Cognito hosted sign-in domain.
+### Google sign-in
+
+Added on 2026-10-01 (decision: [ADR 0005](adr/0005-google-sign-in-through-cognito.md)).
+The **Sign in with Google** button sends the browser to the environment's
+Cognito hosted domain (`smartvibes-songwriter-<env>.auth.us-east-1.amazoncognito.com`),
+which sends it to Google and back. Cognito issues the same kind of token as
+email sign-in, so `/me` works the same way.
+
+One-time setup, in this order:
+
+1. **Google Cloud project.** console.cloud.google.com > **Select a project** >
+   **New project** named `smartvibes-songwriter`. (Ignore the "Set up
+   foundation" banner; it is for large organizations.) No billing is needed.
+2. **Consent screen.** Search **Google Auth Platform** > Get started. App name
+   `SmartVibes Songwriter`, your support email, audience **External**, your
+   contact email. Then **Audience** > add yourself under **Test users**. The app
+   stays in "Testing" mode: only listed test users can sign in, and Google shows
+   an "unverified app" warning (click Advanced to continue).
+3. **OAuth client.** **Clients** > Create client > **Web application**, name
+   `smartvibes-songwriter`, leave JavaScript origins empty, and add one
+   authorized redirect URI per environment:
+   `https://smartvibes-songwriter-dev.auth.us-east-1.amazoncognito.com/oauth2/idpresponse`
+   and the same with `-prod`. Copy the client ID (public; it is in
+   `infra/app.py`) and put the **client secret** in your password manager.
+4. **Store the secret in each AWS account**, never in the repo or GitHub. First
+   run `aws sso login --profile smartvibes-dev` (a login that has expired gives
+   `Token has expired and refresh failed`). Then, as **three separate
+   commands** (pasting them together breaks the hidden prompt):
+   ```bash
+   read -rs GSECRET          # paste the secret, press Enter; nothing is shown
+   aws secretsmanager create-secret --name smartvibes-songwriter/google-oauth-client-secret --secret-string "$GSECRET" --profile smartvibes-dev
+   unset GSECRET
+   ```
+   Repeat with `--profile smartvibes-prod`. Check the account number in the
+   printed ARN. The deploy fails if this secret does not exist in the account.
+5. **GitHub variable** `VITE_COGNITO_DOMAIN` on each environment
+   (`smartvibes-songwriter-<env>.auth.us-east-1.amazoncognito.com`).
+6. **Deploy** (`dev` on merge, `prod` by running the workflow) and test:
+   **Sign in with Google**, then **Call /me**. You should see `200` and your
+   Google email.
+
+Things to know:
+
+- A Google sign-in and an email/password sign-up with the same address are two
+  separate Cognito users, not linked.
+- Return addresses must match exactly, **including the trailing slash**.
+  Testing the authorize URL by hand without it gives `redirect_mismatch`.
+- Cognito domain names are unique across all of AWS. If one is taken, rename it
+  in the stack and in the Google client's redirect URIs.
+- Rotating the Google secret means updating it in both accounts, then
+  redeploying.
 
 ## 7. Anthropic account
 
@@ -287,6 +339,9 @@ time: to see `dev`, open the `smartvibes-dev` account; to see `prod`, open
 | `zsh: command not found: uvicorn` (or `pytest`, `ruff`) | Virtual environment not active | `source .venv/bin/activate` in that folder |
 | Console search for "IAM" opens the wrong service, or the region says Global | IAM is separate from IAM Identity Center | Search for the full name `IAM Identity Center` and check the region is N. Virginia |
 | Site address shows an XML `AccessDenied` page after a first deploy | The site bucket is empty; `scripts/new-env.sh` deploys without a frontend | Run the Deploy workflow once for that environment |
+| `Token has expired and refresh failed` from any `aws` command | The 8-hour SSO login expired | `aws sso login --profile smartvibes-dev` (it covers all three profiles); confirm with `aws sts get-caller-identity --profile smartvibes-dev` |
+| `read -rs GSECRET` then the `aws` command pasted together misbehaves | The hidden prompt consumes or runs the following pasted lines | Run `read -rs`, the `aws` command and `unset` as three separate commands |
+| Cognito `/error?error=redirect_mismatch` | The return address differs from the registered one, usually a missing trailing slash | Use the site address with a trailing slash, or `http://localhost:5173/` |
 | Opening `awsapps.com/start` shows an XML `AccessDenied` error | The address is missing the directory ID | Use the full `https://d-xxxxxxxxxx.awsapps.com/start` from Identity Center > Settings |
 | `ReferenceError: global is not defined`, blank page in the browser | `amazon-cognito-identity-js` expects Node's `global` | `define: { global: 'globalThis' }` in `frontend/vite.config.ts` |
 | Browser CORS error calling `/me`; preflight (OPTIONS) returns 401 | A catch-all route with a token check also caught the browser's OPTIONS preflight | Explicit routes (`/health` public, `/{proxy+}` protected) and no `$default` route, so API Gateway answers preflights itself |
@@ -388,7 +443,6 @@ its own email, plus a `smartvibes-test` profile. Then:
 
 ## Next
 
-- Google sign-in (needs a Google OAuth client; see the plan). Because each
-  environment has its own Cognito user pool, it has to be set up in both.
-- ADR for repo location (is `smartvibesdev` personal or company GitHub).
-- Week 2: songs and fragments.
+- Week 2: songs and fragments (create, edit, delete, keyword search).
+- Later: link a Google user with an email/password user of the same address;
+  publish the Google app (verification) if it should be open to the public.
