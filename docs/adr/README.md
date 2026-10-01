@@ -15,3 +15,4 @@ Format: [0000-template.md](0000-template.md)
 | [0004](0004-repo-under-company-github-account.md) | Host the repository under the company GitHub account | Accepted |
 | [0005](0005-google-sign-in-through-cognito.md) | Google sign-in through Cognito's hosted domain | Accepted |
 | [0006](0006-deployment-flow-and-branching.md) | Deployment flow: merge deploys dev, prod is manual | Accepted |
+| [0007](0007-songs-and-fragments-data-model-and-search.md) | Songs and fragments: data model and keyword search | Accepted |
