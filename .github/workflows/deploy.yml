@@ -1,7 +1,7 @@
 name: Deploy
 
 # Merging to main deploys dev. To deploy another environment, use
-# Actions > Deploy > Run workflow and pick dev, test or prod.
+# Actions > Deploy > Run workflow and pick dev or prod.
 on:
   push:
     branches: [main]
@@ -10,7 +10,7 @@ on:
       environment:
         description: Environment to deploy
         type: choice
-        options: [dev, test, prod]
+        options: [dev, prod]
         default: dev
 
 # One deploy per environment at a time; a newer run waits instead of cancelling.
@@ -25,7 +25,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # The GitHub environment (dev, test or prod) holds that environment's
+    # The GitHub environment (dev or prod) holds that environment's
     # variables and its approval rule (Settings > Environments).
     environment: ${{ inputs.environment || 'dev' }}
     env:
