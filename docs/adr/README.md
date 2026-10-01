@@ -12,3 +12,4 @@ Format: [0000-template.md](0000-template.md)
 | [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
 | [0002](0002-mit-license.md) | License the project under MIT | Accepted |
 | [0003](0003-separate-aws-accounts-per-environment.md) | One AWS account per environment | Accepted |
+| [0004](0004-repo-under-company-github-account.md) | Host the repository under the company GitHub account | Accepted |
