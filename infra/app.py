@@ -21,6 +21,9 @@ SongwriterStack(
     app,
     f"SmartvibesSongwriter-{env_name}",
     env_name=env_name,
+    # Google OAuth client ID (public). The matching client secret lives in AWS
+    # Secrets Manager, in each account, and is never committed.
+    google_client_id="700250318713-hqmkinfvnnt07ar0mtu9otrv3m05eusl.apps.googleusercontent.com",
     env=aws_env,
 )
 

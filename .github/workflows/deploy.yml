@@ -35,6 +35,7 @@ jobs:
       VITE_COGNITO_USER_POOL_ID: ${{ vars.VITE_COGNITO_USER_POOL_ID }}
       VITE_COGNITO_CLIENT_ID: ${{ vars.VITE_COGNITO_CLIENT_ID }}
       VITE_COGNITO_REGION: ${{ vars.VITE_COGNITO_REGION }}
+      VITE_COGNITO_DOMAIN: ${{ vars.VITE_COGNITO_DOMAIN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -58,7 +59,7 @@ jobs:
       - name: Check required variables
         # An empty value would build a front end that cannot sign in, and deploy it.
         run: |
-          for v in VITE_API_URL VITE_COGNITO_USER_POOL_ID VITE_COGNITO_CLIENT_ID VITE_COGNITO_REGION; do
+          for v in VITE_API_URL VITE_COGNITO_USER_POOL_ID VITE_COGNITO_CLIENT_ID VITE_COGNITO_REGION VITE_COGNITO_DOMAIN; do
             if [ -z "${!v}" ]; then
               echo "::error::Missing GitHub environment variable $v"
               exit 1

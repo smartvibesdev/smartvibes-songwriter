@@ -79,6 +79,7 @@ account number must match the account you intended.
    | `VITE_COGNITO_USER_POOL_ID` | that environment's `UserPoolId` output |
    | `VITE_COGNITO_CLIENT_ID` | that environment's `UserPoolClientId` output |
    | `VITE_COGNITO_REGION` | `us-east-1` |
+   | `VITE_COGNITO_DOMAIN` | the `CognitoDomain` output, i.e. `smartvibes-songwriter-<env>.auth.us-east-1.amazoncognito.com` |
 
    For a brand-new environment, its stack outputs don't exist until the stack
    has been deployed once. Deploy it the first time with
@@ -97,6 +98,35 @@ The deploy role can only be assumed by this repo's workflows running in its own
 GitHub environment. Note that the CDK deploy role behind it can create anything
 CloudFormation can in that account, so keep reviewer approval on, especially
 for `prod`.
+
+## Google sign-in setup
+
+Google sign-in uses one Google OAuth client for all environments and a Cognito
+hosted domain per environment (`smartvibes-songwriter-<env>`, which must be
+unique across AWS). The Google client **secret** is never in the repo or in
+GitHub: it is stored in AWS Secrets Manager in each account.
+
+One-time, per account (`dev` and `prod`):
+
+1. In Google Cloud Console (project `smartvibes-songwriter`), the OAuth client
+   lists each environment's address as an authorized redirect URI:
+   `https://smartvibes-songwriter-<env>.auth.us-east-1.amazoncognito.com/oauth2/idpresponse`.
+   The consent screen is in "Testing" mode: only listed test users can sign in
+   with Google until the app is published.
+2. Store the client secret in that account (type or paste it at the hidden
+   prompt; it is not saved in your shell history):
+   ```bash
+   read -rs GSECRET
+   aws secretsmanager create-secret --name smartvibes-songwriter/google-oauth-client-secret \
+     --secret-string "$GSECRET" --profile smartvibes-dev   # and smartvibes-prod
+   unset GSECRET
+   ```
+   The stack reads it at deploy time. The deploy fails if the secret does not
+   exist in that account.
+3. Add the GitHub environment variable `VITE_COGNITO_DOMAIN`
+   (`smartvibes-songwriter-<env>.auth.us-east-1.amazoncognito.com`).
+4. Deploy. Signing in with Google creates a separate Cognito user from an
+   email/password user with the same address; the two are not linked.
 
 ## Deploying by hand
 
