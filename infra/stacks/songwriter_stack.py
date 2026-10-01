@@ -51,7 +51,15 @@ class LocalPipBundling:
 
 
 class SongwriterStack(cdk.Stack):
-    def __init__(self, scope: Construct, construct_id: str, *, env_name: str, **kwargs):
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        *,
+        env_name: str,
+        google_client_id: str,
+        **kwargs,
+    ):
         super().__init__(scope, construct_id, **kwargs)
 
         prefix = f"smartvibes-songwriter-{env_name}"
@@ -73,8 +81,8 @@ class SongwriterStack(cdk.Stack):
         )
 
         # --- Cognito user pool ---
-        # Google sign-in (federated IdP) and a hosted-UI domain are added later,
-        # once the Google OAuth client exists.
+        # Email/password sign-in works directly; Google sign-in goes through
+        # Cognito's hosted domain (defined below, once the site URL exists).
         user_pool = cognito.UserPool(
             self,
             "UserPool",
@@ -85,14 +93,6 @@ class SongwriterStack(cdk.Stack):
             account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
             removal_policy=retain,
         )
-        user_pool_client = user_pool.add_client(
-            "WebClient",
-            user_pool_client_name=f"{prefix}-web",
-            generate_secret=False,  # public SPA client
-            auth_flows=cognito.AuthFlow(user_srp=True),
-            prevent_user_existence_errors=True,
-        )
-
         # --- Static front end: private S3 bucket behind CloudFront (OAC) ---
         site_bucket = s3.Bucket(
             self,
@@ -133,6 +133,55 @@ class SongwriterStack(cdk.Stack):
                 distribution=distribution,
                 distribution_paths=["/*"],
             )
+
+        # --- Cognito: Google sign-in, hosted domain and web client ---
+        # The Google client secret is NOT in the code. It is read at deploy time
+        # from AWS Secrets Manager (create it once per account, see
+        # docs/deployment.md). The client ID is public.
+        google_idp = cognito.UserPoolIdentityProviderGoogle(
+            self,
+            "GoogleIdp",
+            user_pool=user_pool,
+            client_id=google_client_id,
+            client_secret_value=cdk.SecretValue.secrets_manager(
+                "smartvibes-songwriter/google-oauth-client-secret"
+            ),
+            scopes=["openid", "email", "profile"],
+            attribute_mapping=cognito.AttributeMapping(
+                email=cognito.ProviderAttribute.GOOGLE_EMAIL,
+                fullname=cognito.ProviderAttribute.GOOGLE_NAME,
+            ),
+        )
+        # Hosted sign-in domain. The Google client must list
+        # https://<prefix>.auth.<region>.amazoncognito.com/oauth2/idpresponse as an
+        # authorized redirect URI. The prefix must be unique across AWS.
+        user_pool_domain = user_pool.add_domain(
+            "HostedDomain",
+            cognito_domain=cognito.CognitoDomainOptions(domain_prefix=prefix),
+        )
+        site_url = f"https://{distribution.distribution_domain_name}/"
+        user_pool_client = user_pool.add_client(
+            "WebClient",
+            user_pool_client_name=f"{prefix}-web",
+            generate_secret=False,  # public SPA client
+            auth_flows=cognito.AuthFlow(user_srp=True),
+            prevent_user_existence_errors=True,
+            supported_identity_providers=[
+                cognito.UserPoolClientIdentityProvider.COGNITO,
+                cognito.UserPoolClientIdentityProvider.GOOGLE,
+            ],
+            o_auth=cognito.OAuthSettings(
+                flows=cognito.OAuthFlows(authorization_code_grant=True),
+                scopes=[
+                    cognito.OAuthScope.OPENID,
+                    cognito.OAuthScope.EMAIL,
+                    cognito.OAuthScope.PROFILE,
+                ],
+                callback_urls=[site_url, "http://localhost:5173/"],
+                logout_urls=[site_url, "http://localhost:5173/"],
+            ),
+        )
+        user_pool_client.node.add_dependency(google_idp)
 
         # --- Lambda: FastAPI via Mangum ---
         api_fn = _lambda.Function(
@@ -209,5 +258,10 @@ class SongwriterStack(cdk.Stack):
         cdk.CfnOutput(self, "SiteUrl", value=f"https://{distribution.distribution_domain_name}")
         cdk.CfnOutput(self, "ApiUrl", value=http_api.api_endpoint)
         cdk.CfnOutput(self, "UserPoolId", value=user_pool.user_pool_id)
+        cdk.CfnOutput(
+            self,
+            "CognitoDomain",
+            value=f"{user_pool_domain.domain_name}.auth.{self.region}.amazoncognito.com",
+        )
         cdk.CfnOutput(self, "UserPoolClientId", value=user_pool_client.user_pool_client_id)
         cdk.CfnOutput(self, "TableName", value=table.table_name)
