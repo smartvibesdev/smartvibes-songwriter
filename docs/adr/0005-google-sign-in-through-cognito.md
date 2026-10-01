@@ -68,3 +68,26 @@ the infrastructure code.
 - **Callback addresses must match exactly,** including the trailing slash. The
   stack registers the site address with a trailing slash, and
   `http://localhost:5173/` for local development.
+
+## Update, 2026-10-01: sign-out and the account chooser
+
+Testing on `prod` showed that after "Sign out", clicking "Sign in with Google"
+logged the person straight back in. Two sessions were involved, and the app only
+controlled the first:
+
+- **Cognito's session on the hosted domain**, which the app can end. Sign-out
+  now also sends the browser to Cognito's `/logout` endpoint (for people who
+  signed in with Google), so the site no longer signs them back in silently. The
+  stack already registers the site address as an allowed sign-out address.
+- **Google's own session in the browser**, which the app cannot end. Cognito's
+  `/logout` does not sign anyone out of Google. If Google is still signed in and
+  has the person's consent, the sign-in goes straight through without a prompt.
+  This is normal "Sign in with Google" behavior, not a bypass.
+
+Forcing Google to show its account chooser every time (`prompt=select_account`)
+would cover shared computers, but Cognito only supports `prompt` in its newer
+"managed login" mode, not in the classic hosted sign-in page the domains
+currently use (`ManagedLoginVersion` 1). Moving to managed login is a larger
+change to the stack, so it is deferred. Revisit it if the app is used on shared
+computers.
+

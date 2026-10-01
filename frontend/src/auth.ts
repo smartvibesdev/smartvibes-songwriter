@@ -47,12 +47,24 @@ export function signIn(email: string, password: string): Promise<CognitoUserSess
   })
 }
 
+/**
+ * Sign out. Always clears the tokens held in this browser. If the user signed in
+ * with Google, also visits Cognito's /logout endpoint, which ends the Cognito
+ * session on the hosted domain (otherwise "Sign in with Google" could log them
+ * straight back in). It does not sign them out of Google itself, and the page
+ * navigates away, so call this last.
+ */
 export function signOut(): void {
   pool.getCurrentUser()?.signOut()
+  const wasFederated = readTokens() !== null
   try {
     localStorage.removeItem(TOKENS_KEY)
   } catch {
     /* storage unavailable */
+  }
+  if (wasFederated && COGNITO_DOMAIN) {
+    const params = new URLSearchParams({ client_id: CLIENT_ID, logout_uri: REDIRECT_URI })
+    window.location.assign(`https://${COGNITO_DOMAIN}/logout?${params}`)
   }
 }
 
