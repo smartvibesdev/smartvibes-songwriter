@@ -6,112 +6,133 @@ secrets belong in this file; values for the deployed stack live in
 
 ## Where things live
 
-| Thing              | Value                                                                      |
-| ------------------ | -------------------------------------------------------------------------- |
-| AWS region         | `us-east-1`                                                                |
-| CDK stack          | `SmartvibesSongwriter-dev`                                                 |
-| AWS CLI profile    | `smartvibes-dev` (IAM Identity Center / SSO login)                         |
-| Resource naming    | `smartvibes-songwriter-<env>-<resource>`                                   |
+Three AWS accounts in one AWS Organization, all in `us-east-1`:
+
+| Account | CLI profile | Holds |
+| ------- | ----------- | ----- |
+| Management ("Smart Vibes") | `smartvibes-mgmt` | The organization and IAM Identity Center only. No app resources, apart from `CDKToolkit` (the CDK bootstrap). |
+| `smartvibes-dev` | `smartvibes-dev` | The `dev` environment: stack `SmartvibesSongwriter-dev` |
+| `smartvibes-prod` | `smartvibes-prod` | The `prod` environment: stack `SmartvibesSongwriter-prod` |
+
+All three profiles use one SSO session, so a single
+`aws sso login --profile smartvibes-dev` signs in to all of them.
+
+| Thing | Value |
+| ----- | ----- |
+| Resource naming | `smartvibes-songwriter-<env>-<resource>` |
 | Stateful resources | DynamoDB table and Cognito user pool are `RETAIN` (survive stack deletion) |
+| Each account has its own | table, user pool, API, Lambda, site, CDK bootstrap, GitHub deploy role |
+
+`dev` and `prod` share nothing: users, data and URLs are separate. A `test`
+environment does not exist yet; if added, give it its own account the same way.
 
 ## Automatic deploy (GitHub Actions)
 
-There are three environments: `dev`, `test` and `prod`. Each one is a separate
-CDK stack in AWS (`SmartvibesSongwriter-dev`, `-test`, `-prod`) with its own
-table, user pool, API and site.
-
 `.github/workflows/deploy.yml` is one workflow that deploys whichever
-environment it is given:
+environment it is given. Each environment deploys into its **own AWS account**,
+through a role in that account:
 
 - **Merging to `main` deploys `dev`.**
 - **To deploy another environment:** GitHub repo > Actions > Deploy > Run
-  workflow, then pick `dev`, `test` or `prod`.
+  workflow, then pick `dev` or `prod` (`test` is in the list but has no account).
 
 It signs in to AWS with a short-lived OIDC (OpenID Connect) token, so no AWS
 keys are stored in GitHub. Each deploy runs in the GitHub _environment_ of the
-same name. The environment holds that environment's variables and its approval
+same name. The environment holds that environment's variables, including the
+ARN (Amazon Resource Name) of the deploy role in its account, and its approval
 rule (for example, you must approve before anything deploys to `prod`).
 
-### One-time setup: the AWS deploy role (once for the whole account)
+### One-time setup per account: bootstrap and deploy role
 
-Run by hand, from `infra/` with the venv active and your AWS login:
+Run by hand, from `infra/` with the venv active. Use the environment's profile
+(`smartvibes-dev` or `smartvibes-prod`) and its `-c env=` value:
 
 ```bash
-cdk deploy SmartvibesSongwriter-github
+aws sso login --profile smartvibes-dev
+cd infra && source .venv/bin/activate
+cdk bootstrap aws://<that-account-id>/us-east-1 --profile smartvibes-dev
+cdk deploy SmartvibesSongwriter-github -c env=dev --profile smartvibes-dev
+# prod: the same two commands with <prod-account-id>, -c env=prod, --profile smartvibes-prod
 ```
 
-This creates the OIDC provider and one deploy role that workflows running in
-the `dev`, `test` or `prod` environment of this repo may use. Copy the
-`DeployRoleArn` output; you need it for every environment below.
+`cdk bootstrap` creates the storage and roles CDK needs in that account. The
+`-github` stack creates the OIDC provider and one deploy role that trusts only
+that environment's GitHub workflows (`-c env=dev` trusts only the `dev`
+environment, `-c env=prod` only `prod`). Copy the `DeployRoleArn` output; its
+account number must match the account you intended.
 
-### One-time setup: each environment (repeat for dev, test, prod)
+### One-time setup per environment: GitHub environment and variables
 
 1. **Create the environment** in GitHub: repo Settings > Environments > New
-   environment, named `dev` (or `test`, `prod`). Under "Required reviewers",
-   add yourself. Do this before the first deploy; if GitHub creates the
-   environment on its own, it has no reviewer and would deploy without asking.
+   environment, named `dev` or `prod`. Tick **Required reviewers**, add
+   yourself and **click Save protection rules**. Leave "Prevent self-review"
+   off. Do this before the first deploy; if GitHub creates the environment on
+   its own, it has no reviewer and would deploy without asking.
 2. **Add variables to that environment** (Settings > Environments > the
-   environment > Environment variables). None of these are secret, and the
-   names are the same in every environment while the values differ:
+   environment > Environment variables). None are secret. The names are the
+   same in every environment; the values differ:
 
-   | Variable                    | Value                                        |
-   | --------------------------- | -------------------------------------------- |
-   | `AWS_DEPLOY_ROLE_ARN`       | `DeployRoleArn` from the step above          |
-   | `VITE_API_URL`              | that environment's `ApiUrl` stack output     |
-   | `VITE_COGNITO_USER_POOL_ID` | that environment's `UserPoolId` output       |
-   | `VITE_COGNITO_CLIENT_ID`    | that environment's `UserPoolClientId` output |
-   | `VITE_COGNITO_REGION`       | `us-east-1`                                  |
+   | Variable | Value |
+   | -------- | ----- |
+   | `AWS_DEPLOY_ROLE_ARN` | that account's `DeployRoleArn` |
+   | `VITE_API_URL` | that environment's `ApiUrl` stack output |
+   | `VITE_COGNITO_USER_POOL_ID` | that environment's `UserPoolId` output |
+   | `VITE_COGNITO_CLIENT_ID` | that environment's `UserPoolClientId` output |
+   | `VITE_COGNITO_REGION` | `us-east-1` |
 
    For a brand-new environment, its stack outputs don't exist until the stack
-   has been deployed once. Deploy it the first time by hand (see "Deploying by
-   hand" below), copy the outputs into the variables, then use the workflow
-   from then on.
+   has been deployed once. Deploy it the first time with
+   `scripts/new-env.sh <env>` (see "Deploying by hand"), copy the outputs into
+   the variables, then run the workflow once to upload the site.
 
 ### What happens on each deploy
 
 The workflow waits for the environment's approval, checks that the variables
 are set, builds the frontend, then runs
-`cdk deploy SmartvibesSongwriter-<env> -c env=<env> --require-approval never`.
-Only that environment's app stack is deployed; `SmartvibesSongwriter-github` is
-always deployed by hand.
+`cdk deploy SmartvibesSongwriter-<env> -c env=<env> --require-approval never`
+in that environment's account. Only that environment's app stack is deployed;
+the `-github` stack is always deployed by hand.
 
-The deploy role can only be assumed by this repo's workflows running in the
-`dev`, `test` or `prod` environment. Note that the CDK deploy role behind it
-can create anything CloudFormation can, so keep reviewer approval on,
-especially for `prod`.
+The deploy role can only be assumed by this repo's workflows running in its own
+GitHub environment. Note that the CDK deploy role behind it can create anything
+CloudFormation can in that account, so keep reviewer approval on, especially
+for `prod`.
 
 ## Deploying by hand
 
-`scripts/new-env.sh <env>` runs the first-deploy steps for a new environment.
+Normally the workflow deploys. Deploy by hand only for the **first** deploy of
+a new environment (its stack outputs don't exist yet, so the workflow's
+variables check would fail), or if GitHub Actions is down.
 
-Normally the workflow above deploys. Deploy by hand only for the **first**
-deploy of a new environment (its stack outputs don't exist yet, so the
-workflow's variables check would fail), or if GitHub Actions is down.
-
-The frontend must be built first, because the stack uploads `frontend/dist` to
-the site bucket. For a brand-new environment, skip the build and remove any old
-one (`rm -rf frontend/dist`) so another environment's values are not uploaded
-to the wrong site.
+**First deploy of an environment:** from the repo root, on an up-to-date `main`
+with no uncommitted changes:
 
 ```bash
-# 1. Log in (SSO sessions last 8 hours)
-aws sso login --profile smartvibes-dev
-
-# 2. Tell this terminal which profile to use (repeat in every new terminal window)
-export AWS_PROFILE=smartvibes-dev
-
-# 3. Build the frontend (skip for a brand-new environment; see above)
-cd frontend && npm run build && cd ..
-
-# 4. From infra/, with the venv active. Name the stack: a bare `cdk deploy`
-#    would also redeploy the GitHub access stack.
-cd infra && source .venv/bin/activate
-cdk diff   SmartvibesSongwriter-dev -c env=dev   # preview, changes nothing
-cdk deploy SmartvibesSongwriter-dev -c env=dev   # apply; answer y to the IAM prompt
+scripts/new-env.sh dev     # or prod
 ```
 
-Use the environment's name in place of `dev` for `test` or `prod`. Merge your
-branch and update local `main` first, so you deploy what is on `main`.
+It picks the profile from the environment name (`smartvibes-dev` or
+`smartvibes-prod`), logs you in if needed, removes any local `frontend/dist` (so
+another environment's values are not uploaded to this site), shows the diff,
+asks before deploying, deploys, and prints the variables to add in GitHub. The
+site stays empty until you run the workflow once for that environment.
+
+**Fallback deploy of an existing environment**, if GitHub Actions is down.
+Build the frontend first, because the stack uploads `frontend/dist`. The
+frontend must be built with that environment's values (`frontend/.env.local`
+points at `dev`):
+
+```bash
+aws sso login --profile smartvibes-prod
+export AWS_PROFILE=smartvibes-prod          # per terminal window
+cd frontend && npm run build && cd ..
+cd infra && source .venv/bin/activate
+cdk diff   SmartvibesSongwriter-prod -c env=prod
+cdk deploy SmartvibesSongwriter-prod -c env=prod   # answer y to the IAM prompt
+```
+
+Name the stack: a bare `cdk deploy` would also redeploy the `-github` stack.
+Use `dev` and `smartvibes-dev` for the dev account.
 
 ## Getting the deployed values back
 
@@ -124,13 +145,14 @@ aws cloudformation describe-stacks \
   --profile smartvibes-dev
 ```
 
-Put them in `frontend/.env.local` (see `frontend/.env.example`):
+Use `-prod` and `smartvibes-prod` for prod. Put the dev values in
+`frontend/.env.local` (see `frontend/.env.example`):
 
-| Env variable                | Stack output       |
-| --------------------------- | ------------------ |
-| `VITE_API_URL`              | `ApiUrl`           |
-| `VITE_COGNITO_USER_POOL_ID` | `UserPoolId`       |
-| `VITE_COGNITO_CLIENT_ID`    | `UserPoolClientId` |
+| Env variable | Stack output |
+| ------------ | ------------ |
+| `VITE_API_URL` | `ApiUrl` |
+| `VITE_COGNITO_USER_POOL_ID` | `UserPoolId` |
+| `VITE_COGNITO_CLIENT_ID` | `UserPoolClientId` |
 
 ## Quick health check
 
