@@ -39,9 +39,9 @@ No account IDs, keys or tokens are recorded here. `<account-id>` means your
   only), `smartvibes-dev` and `smartvibes-prod`.
 - **Environments:** `dev` and `prod`, each a stack in its own account. `test`
   does not exist.
-- **Deploys:** merging to `main` starts the Deploy workflow for `dev`, which
-  waits for your approval in GitHub, then deploys. `prod` is deployed by
-  running the workflow by hand.
+- **Deploys:** merging to `main` deploys `dev` automatically, with no approval.
+  `prod` is deployed by running the Deploy workflow by hand and approving it.
+  One branch (`main`); see [ADR 0006](adr/0006-deployment-flow-and-branching.md).
 - **Sign-in:** email and password, or Google, through Amazon Cognito, one user
   pool per environment (see section 6 and ADR 0005).
 - **Live check:** `GET <ApiUrl>/health` returns `{"status":"ok"}`.
@@ -304,16 +304,20 @@ workflow**, because the merge itself starts a deploy):
 1. `cdk deploy SmartvibesSongwriter-github` from `infra/`. Copy the
    `DeployRoleArn` output.
 2. GitHub > repo Settings > Environments > New environment, named exactly
-   `dev`. Tick **Required reviewers**, add yourself and **click Save protection
-   rules**. Leave "Prevent self-review" **off**; if it is on, you cannot
-   approve a deploy you started. If the environment is created automatically
-   instead, it has no reviewer and deploys without asking.
+   `dev` (or `prod`). Under "Deployment branches and tags", allow only `main`.
+   For `prod`, tick **Required reviewers**, add yourself and **click Save
+   protection rules**; leave "Prevent self-review" **off** (if it is on, you
+   cannot approve a deploy you started). `dev` has no reviewer, so it deploys
+   without a prompt (this was changed on 2026-10-01; it originally had one).
+   If an environment is created automatically instead, it has no reviewer and
+   deploys without asking.
 3. On that environment add five **environment variables** (not secrets; none
    are sensitive): `AWS_DEPLOY_ROLE_ARN`, `VITE_API_URL`,
    `VITE_COGNITO_USER_POOL_ID`, `VITE_COGNITO_CLIENT_ID`,
    `VITE_COGNITO_REGION`.
-4. Merge. The run waits at "Waiting for review": open it, **Review
-   deployments**, tick the environment, **Approve and deploy**.
+4. Merge. The `dev` deploy starts by itself. For `prod`, run the workflow by
+   hand; it waits at "Waiting for review": open it, **Review deployments**,
+   tick `prod`, **Approve and deploy**.
 
 ## Seeing the environments in the AWS console
 
@@ -406,7 +410,7 @@ Steps, in order:
 7. **First deploy into each account** with `scripts/new-env.sh dev` and
    `scripts/new-env.sh prod` (from an up-to-date `main`). It prints the new
    `VITE_*` values. Put them in the GitHub environments.
-8. **Run the Deploy workflow** for `dev` and for `prod`, approving each. This
+8. **Run the Deploy workflow** for `dev` and for `prod` (approve the `prod` one). This
    uploads the site; before this the site address shows an S3 `AccessDenied`
    XML page because the bucket is empty. The runs can go at the same time.
 9. **Test:** sign up on each new site and click **Call /me**.
@@ -443,11 +447,12 @@ its own email, plus a `smartvibes-test` profile. Then:
 
 1. Bootstrap the account and deploy `SmartvibesSongwriter-github -c env=test`
    there (steps 4 and 5 above).
-2. Create the GitHub environment `test` with yourself as a required reviewer
-   (save it), and set `AWS_DEPLOY_ROLE_ARN`.
+2. Create the GitHub environment `test`, allow only `main`, decide whether it
+   needs a required reviewer (save it if so), and set `AWS_DEPLOY_ROLE_ARN`.
 3. `scripts/new-env.sh test`, then add the printed `VITE_*` values to the `test`
    environment.
-4. Run **Actions > Deploy > Run workflow**, choose `test`, approve.
+4. Run **Actions > Deploy > Run workflow**, choose `test` (approve if it has a
+   reviewer).
 5. Sign up a test user on the `test` `SiteUrl` and click **Call /me**.
 
 ## Next
