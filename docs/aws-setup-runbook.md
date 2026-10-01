@@ -248,6 +248,14 @@ Things to know:
   in the stack and in the Google client's redirect URIs.
 - Rotating the Google secret means updating it in both accounts, then
   redeploying.
+- **Sign out** clears the browser's tokens and, for Google users, also visits
+  Cognito's `/logout` endpoint so the site does not sign you straight back in.
+  It cannot sign you out of **Google itself**: if the browser is still signed in
+  to Google, clicking **Sign in with Google** again goes straight through with no
+  prompt (on `dev`, on `prod`, or after signing out). That is normal Google
+  behavior. For a clean test, sign out of Google in that window or use a fresh
+  incognito window. Showing Google's account chooser every time needs Cognito's
+  managed login (see ADR 0005).
 
 ## 7. Anthropic account
 
@@ -342,6 +350,7 @@ time: to see `dev`, open the `smartvibes-dev` account; to see `prod`, open
 | `Token has expired and refresh failed` from any `aws` command | The 8-hour SSO login expired | `aws sso login --profile smartvibes-dev` (it covers all three profiles); confirm with `aws sts get-caller-identity --profile smartvibes-dev` |
 | `read -rs GSECRET` then the `aws` command pasted together misbehaves | The hidden prompt consumes or runs the following pasted lines | Run `read -rs`, the `aws` command and `unset` as three separate commands |
 | Cognito `/error?error=redirect_mismatch` | The return address differs from the registered one, usually a missing trailing slash | Use the site address with a trailing slash, or `http://localhost:5173/` |
+| "Sign in with Google" signs me in without asking, even after Sign out | Google still has a signed-in session in this browser, and its consent for this app (the Google client is shared by `dev` and `prod`) | Expected. Sign out of Google in that browser, or use a new incognito window. See ADR 0005 |
 | Opening `awsapps.com/start` shows an XML `AccessDenied` error | The address is missing the directory ID | Use the full `https://d-xxxxxxxxxx.awsapps.com/start` from Identity Center > Settings |
 | `ReferenceError: global is not defined`, blank page in the browser | `amazon-cognito-identity-js` expects Node's `global` | `define: { global: 'globalThis' }` in `frontend/vite.config.ts` |
 | Browser CORS error calling `/me`; preflight (OPTIONS) returns 401 | A catch-all route with a token check also caught the browser's OPTIONS preflight | Explicit routes (`/health` public, `/{proxy+}` protected) and no `$default` route, so API Gateway answers preflights itself |
