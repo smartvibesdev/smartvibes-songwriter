@@ -155,9 +155,13 @@ class SongwriterStack(cdk.Stack):
         # Hosted sign-in domain. The Google client must list
         # https://<prefix>.auth.<region>.amazoncognito.com/oauth2/idpresponse as an
         # authorized redirect URI. The prefix must be unique across AWS.
+        # Managed login (not the classic hosted UI), because only it forwards the
+        # `prompt` parameter to Google, which the web app uses to show Google's
+        # account chooser after a sign-out (ADR 0009).
         user_pool_domain = user_pool.add_domain(
             "HostedDomain",
             cognito_domain=cognito.CognitoDomainOptions(domain_prefix=prefix),
+            managed_login_version=cognito.ManagedLoginVersion.NEWER_MANAGED_LOGIN,
         )
         site_url = f"https://{distribution.distribution_domain_name}/"
         user_pool_client = user_pool.add_client(
@@ -185,6 +189,17 @@ class SongwriterStack(cdk.Stack):
             ),
         )
         user_pool_client.node.add_dependency(google_idp)
+
+        # Managed login needs a branding style for each app client created through
+        # the API. Cognito's default values are enough: users are sent straight to
+        # Google and rarely see Cognito's own pages.
+        cognito.CfnManagedLoginBranding(
+            self,
+            "WebClientBranding",
+            user_pool_id=user_pool.user_pool_id,
+            client_id=user_pool_client.user_pool_client_id,
+            use_cognito_provided_values=True,
+        )
 
         # --- Lambda: FastAPI via Mangum ---
         api_fn = _lambda.Function(
