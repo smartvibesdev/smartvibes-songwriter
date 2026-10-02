@@ -84,7 +84,8 @@ async function revokeGoogleRefreshToken(refreshToken: string): Promise<void> {
  * stops working), then clears the tokens held in this browser. If the user signed
  * in with Google, also visits Cognito's /logout endpoint, which ends the Cognito
  * session on the hosted domain (otherwise "Sign in with Google" could log them
- * straight back in). It does not sign them out of Google itself, and the page
+ * straight back in). It does not sign them out of Google itself (so
+ * `signInWithGoogle` asks Google for its account chooser), and the page
  * navigates away, so call this last.
  */
 export async function signOut(): Promise<void> {
@@ -175,6 +176,8 @@ export async function signInWithGoogle(): Promise<void> {
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
     scope: 'openid email profile',
+    // Make Google show its account chooser even if a Google session is still active.
+    prompt: 'select_account',
     state,
     code_challenge: challenge,
     code_challenge_method: 'S256',
