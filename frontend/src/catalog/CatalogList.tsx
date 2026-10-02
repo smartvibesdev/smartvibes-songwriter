@@ -59,7 +59,7 @@ export function CatalogList<Item extends { id: string }>(props: CatalogListProps
       )}
 
       {page.items.length > 0 && (
-        <ul className="overflow-hidden rounded-3xl border border-border bg-card shadow-card lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        <ul className="overflow-hidden rounded-3xl border border-border bg-card shadow-card lg:min-h-0 lg:overflow-y-auto">
           {page.items.map((item) => (
             <li key={item.id} className="border-b border-border last:border-b-0">
               {renderRow(item)}
@@ -68,8 +68,9 @@ export function CatalogList<Item extends { id: string }>(props: CatalogListProps
         </ul>
       )}
 
-      {/* The pager sits in the middle; the count is at the right (stacked and centered on a phone). */}
-      <div className="grid items-center justify-items-center gap-y-3 lg:grid-cols-[1fr_auto_1fr]">
+      {/* The pager sits in the middle; the count is at the right (stacked and centered on a phone). On a wide
+          screen the bar stays at the bottom of the window, however short the list is. */}
+      <div className="grid items-center justify-items-center gap-y-3 lg:mt-auto lg:grid-cols-[1fr_auto_1fr]">
         <span className="hidden lg:block" />
 
         {page.pages > 1 ? <Pager page={page.page} pages={page.pages} sort={sort} onPage={onPage} /> : <span />}
