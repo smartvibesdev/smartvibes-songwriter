@@ -46,17 +46,62 @@ export function signIn(email: string, password: string): Promise<CognitoUserSess
   })
 }
 
+// How long sign-out waits for Cognito to cancel a token before giving up.
+const REVOKE_TIMEOUT_MS = 5000
+
 /**
- * Sign out. Always clears the tokens held in this browser. If the user signed in
- * with Google, also visits Cognito's /logout endpoint, which ends the Cognito
+ * Asks Cognito to cancel the tokens from an email sign-in. The library only does
+ * this when `signOut` is given a callback. Best effort: it also resolves if the
+ * request fails or takes too long, so signing out never gets stuck.
+ */
+function revokeEmailTokens(user: CognitoUser): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, REVOKE_TIMEOUT_MS)
+
+    user.signOut(() => {
+      clearTimeout(timer)
+      resolve()
+    })
+  })
+}
+
+/** Asks Cognito to cancel the refresh token from a Google sign-in. Best effort, like `revokeEmailTokens`. */
+async function revokeGoogleRefreshToken(refreshToken: string): Promise<void> {
+  try {
+    await fetch(`https://${COGNITO_DOMAIN}/oauth2/revoke`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token: refreshToken, client_id: CLIENT_ID }),
+      signal: AbortSignal.timeout(REVOKE_TIMEOUT_MS),
+    })
+  } catch {
+    /* offline or timed out: the sign-out below still happens */
+  }
+}
+
+/**
+ * Sign out. Asks Cognito to cancel this browser's refresh token (so a copy of it
+ * stops working), then clears the tokens held in this browser. If the user signed
+ * in with Google, also visits Cognito's /logout endpoint, which ends the Cognito
  * session on the hosted domain (otherwise "Sign in with Google" could log them
  * straight back in). It does not sign them out of Google itself, and the page
  * navigates away, so call this last.
  */
-export function signOut(): void {
-  pool.getCurrentUser()?.signOut()
+export async function signOut(): Promise<void> {
+  const user = pool.getCurrentUser()
 
-  const wasFederated = Boolean(readTokens())
+  if (user) {
+    await revokeEmailTokens(user)
+
+    // Clears the saved tokens even if the revoke above failed.
+    user.signOut()
+  }
+
+  const googleTokens = readTokens()
+
+  if (googleTokens?.refreshToken) {
+    await revokeGoogleRefreshToken(googleTokens.refreshToken)
+  }
 
   try {
     localStorage.removeItem(TOKENS_KEY)
@@ -64,7 +109,7 @@ export function signOut(): void {
     /* storage unavailable */
   }
 
-  if (wasFederated && COGNITO_DOMAIN) {
+  if (googleTokens && COGNITO_DOMAIN) {
     const params = new URLSearchParams({ client_id: CLIENT_ID, logout_uri: REDIRECT_URI })
 
     window.location.assign(`https://${COGNITO_DOMAIN}/logout?${params}`)

@@ -166,6 +166,9 @@ class SongwriterStack(cdk.Stack):
             generate_secret=False,  # public SPA client
             auth_flows=cognito.AuthFlow(user_srp=True),
             prevent_user_existence_errors=True,
+            # Cognito's default is 30 days. A stolen refresh token stays useful for
+            # this long, so keep it short (ADR 0008).
+            refresh_token_validity=cdk.Duration.days(7),
             supported_identity_providers=[
                 cognito.UserPoolClientIdentityProvider.COGNITO,
                 cognito.UserPoolClientIdentityProvider.GOOGLE,
