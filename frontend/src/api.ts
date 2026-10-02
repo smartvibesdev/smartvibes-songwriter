@@ -4,13 +4,18 @@ const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
 // Shapes returned by the backend (see backend/app/models.py). Dates are ISO strings.
 
-export type SongInput = { title: string; body: string }
+export type SongInput = { title: string; body: string; tags: string[] }
 export type Song = SongInput & { id: string; created_at: string; updated_at: string }
 
 export type FragmentInput = { text: string; tags: string[] }
 export type Fragment = FragmentInput & { id: string; created_at: string; updated_at: string }
 
 export type SearchResults = { songs: Song[]; fragments: Fragment[] }
+
+/** Which kinds of item a search or tag list covers. */
+export type Scope = 'both' | 'songs' | 'fragments'
+
+export type TagCount = { tag: string; count: number }
 
 /** Size limits enforced by the backend (keep in sync with backend/app/models.py). */
 export const LIMITS = { title: 200, songBody: 20_000, fragmentText: 2_000 }
@@ -121,6 +126,37 @@ export const updateFragment = (id: string, fragment: FragmentInput) =>
 
 export const deleteFragment = (id: string) => request<void>('DELETE', `/fragments/${encodeURIComponent(id)}`)
 
-// --- Search ---
+// --- Search, tags and random fragments ---
 
-export const search = (q: string) => request<SearchResults>('GET', `/search?q=${encodeURIComponent(q)}`)
+export type SearchQuery = { q?: string; scope?: Scope; tags?: string[] }
+
+/** Songs and fragments matching every word in `q` and every tag in `tags`. */
+export function search(query: SearchQuery) {
+  const params = new URLSearchParams({ q: query.q ?? '', scope: query.scope ?? 'both' })
+
+  for (const tag of query.tags ?? []) {
+    params.append('tag', tag)
+  }
+
+  return request<SearchResults>('GET', `/search?${params}`)
+}
+
+/** Every tag in use, most used first. */
+export const listTags = (scope: Scope = 'both') => request<TagCount[]>('GET', `/tags?scope=${scope}`)
+
+export type RandomQuery = { count?: number; tag?: string; exclude?: string }
+
+/** Random fragments. `exclude` is an ID to avoid, such as the fragment already on screen. */
+export function randomFragments(query: RandomQuery = {}) {
+  const params = new URLSearchParams({ count: String(query.count ?? 1) })
+
+  if (query.tag) {
+    params.set('tag', query.tag)
+  }
+
+  if (query.exclude) {
+    params.set('exclude', query.exclude)
+  }
+
+  return request<Fragment[]>('GET', `/fragments/random?${params}`)
+}

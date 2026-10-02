@@ -61,3 +61,15 @@ def test_a_tag_that_is_too_long_is_rejected():
     FragmentIn(text="a line", tags=["a" * MAX_TAG_LENGTH])
     with pytest.raises(ValidationError):
         FragmentIn(text="a line", tags=["a" * (MAX_TAG_LENGTH + 1)])
+
+
+def test_song_tags_follow_the_same_rules_as_fragment_tags():
+    assert SongIn(title="x", tags=["Love", "love ", " RAIN", ""]).tags == [
+        "love",
+        "rain",
+    ]
+    assert SongIn(title="x").tags == []
+    with pytest.raises(ValidationError):
+        SongIn(title="x", tags=[f"t{i}" for i in range(MAX_TAGS + 1)])
+    with pytest.raises(ValidationError):
+        SongIn(title="x", tags=["a" * (MAX_TAG_LENGTH + 1)])

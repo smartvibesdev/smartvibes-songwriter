@@ -18,3 +18,5 @@ Format: [0000-template.md](0000-template.md)
 | [0007](0007-songs-and-fragments-data-model-and-search.md) | Songs and fragments: data model and keyword search | Accepted |
 | [0008](0008-session-lifetime-and-sign-out-revocation.md) | Session lifetime and sign-out revocation | Accepted |
 | [0009](0009-google-account-chooser-through-managed-login.md) | Google account chooser through Cognito managed login | Accepted |
+| [0010](0010-search-scope-tags-and-random-fragments.md) | Search scope, song tags and random fragments | Accepted |
+| [0011](0011-frontend-styling-tailwind-and-theme-tokens.md) | Frontend styling: Tailwind, theme tokens and light/dark mode | Accepted |

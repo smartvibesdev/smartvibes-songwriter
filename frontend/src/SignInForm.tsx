@@ -1,13 +1,15 @@
 import { type FormEvent, useState } from 'react'
 import { confirmSignUp, signIn, signInWithGoogle, signUp } from './auth'
 import { describeError } from './errors'
+import { Button } from './ui/Button'
+import { TextInput } from './ui/fields'
 
 type Mode = 'signIn' | 'signUp' | 'confirm'
 
 const HEADINGS: Record<Mode, string> = {
-  signIn: 'Sign in',
-  signUp: 'Create account',
-  confirm: 'Verify email',
+  signIn: 'Welcome back',
+  signUp: 'Create your account',
+  confirm: 'Check your email',
 }
 
 const SUBMIT_LABELS: Record<Mode, string> = {
@@ -55,47 +57,70 @@ export function SignInForm({ onSignedIn, notice }: SignInFormProps) {
   }
 
   return (
-    <form onSubmit={submit}>
-      <h2>{HEADINGS[mode]}</h2>
+    <form onSubmit={submit} className="flex flex-col gap-5">
+      <h1 className="font-display text-3xl font-semibold">{HEADINGS[mode]}</h1>
 
-      <p>
-        <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-      </p>
+      <TextInput
+        type="email"
+        aria-label="Email"
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        required
+      />
 
       {showPasswordField && (
-        <p>
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </p>
+        <TextInput
+          type="password"
+          aria-label="Password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
       )}
 
       {mode === 'confirm' && (
-        <p>
-          <input placeholder="Verification code" value={code} onChange={(e) => setCode(e.target.value)} required />
+        <TextInput
+          aria-label="Verification code"
+          placeholder="Verification code"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          required
+        />
+      )}
+
+      <Button type="submit">{SUBMIT_LABELS[mode]}</Button>
+
+      {mode === 'signIn' && (
+        <div className="flex flex-col items-center gap-3">
+          <Button variant="outline" onClick={() => signInWithGoogle()} className="w-full">
+            Continue with Google
+          </Button>
+
+          <Button variant="quiet" onClick={() => setMode('signUp')}>
+            Create an account
+          </Button>
+        </div>
+      )}
+
+      {mode === 'signUp' && (
+        <Button variant="quiet" onClick={() => setMode('signIn')}>
+          I already have an account
+        </Button>
+      )}
+
+      {notice && (
+        <p role="alert" className="text-sm text-soft">
+          {notice}
         </p>
       )}
 
-      <button type="submit">{SUBMIT_LABELS[mode]}</button>
-
-      {mode === 'signIn' && (
-        <>
-          {' '}
-          <button type="button" onClick={() => setMode('signUp')}>
-            Create account
-          </button>{' '}
-          <button type="button" onClick={() => signInWithGoogle()}>
-            Sign in with Google
-          </button>
-        </>
+      {message && (
+        <p role="alert" className="text-sm text-soft">
+          {message}
+        </p>
       )}
-
-      {notice && <p>{notice}</p>}
-      {message && <p>{message}</p>}
     </form>
   )
 }

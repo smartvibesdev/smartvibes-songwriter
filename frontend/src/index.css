@@ -1,8 +1,86 @@
-body {
-  font-family: system-ui, sans-serif;
-  margin: 2rem;
+@import '@fontsource-variable/bricolage-grotesque';
+@import '@fontsource-variable/figtree';
+@import 'tailwindcss';
+
+/* Dark mode is the `dark` class on <html> (see theme.ts and the script in index.html). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Color roles. Screens use the role names (bg-background, text-muted, ...), never raw
+ * colors, so switching themes only swaps these values. Light: cobalt and orange on
+ * near-white. Dark: the same cobalt and orange on a deep violet-navy ground.
+ */
+:root {
+  color-scheme: light;
+  --background: #fbfcfe;
+  --foreground: #0f1630;
+  --card: #ffffff;
+  --border: #e6eaf4;
+  --muted: #5b6580;
+  --soft: #3a4360;
+  --primary: #2a46f0;
+  --primary-foreground: #ffffff;
+  --primary-text: #2a46f0;
+  --accent: #ff7a1a;
+  --accent-foreground: #0f1630;
+  --accent-text: #c85a00;
+  --destructive: #c8361a;
+  --destructive-foreground: #ffffff;
+  --danger-text: #c8361a;
+  --hero-foreground: #ffffff;
+  --hero-muted: #d6ddff;
+  --card-shadow: 0 8px 28px rgba(15, 22, 48, 0.05);
 }
 
-.tabs button[aria-pressed='true'] {
-  font-weight: bold;
+.dark {
+  color-scheme: dark;
+  --background: #14121f;
+  --foreground: #f3effa;
+  --card: #1e1b2e;
+  --border: #2c2842;
+  --muted: #a9a3c2;
+  --soft: #cfc9e6;
+  --primary: #2a46f0;
+  --primary-foreground: #ffffff;
+  --primary-text: #8fa2ff;
+  --accent: #ff7a1a;
+  --accent-foreground: #14121f;
+  --accent-text: #ff9a4d;
+  --destructive: #c8361a;
+  --destructive-foreground: #ffffff;
+  --danger-text: #ff8a73;
+  --hero-foreground: #ffffff;
+  --hero-muted: #d6ddff;
+  --card-shadow: none;
+}
+
+@theme inline {
+  --font-sans: 'Figtree Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Bricolage Grotesque Variable', ui-sans-serif, system-ui, sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-soft: var(--soft);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-text: var(--primary-text);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-text: var(--accent-text);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-danger-text: var(--danger-text);
+  --color-hero-foreground: var(--hero-foreground);
+  --color-hero-muted: var(--hero-muted);
+
+  --shadow-card: var(--card-shadow);
+}
+
+@layer base {
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+  }
 }

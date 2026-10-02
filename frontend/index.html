@@ -4,6 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SmartVibes Songwriter</title>
+    <script>
+      // Apply the saved (or system) color theme before the page paints, so dark mode does not flash white.
+      // Keep the storage key in sync with src/theme.ts.
+      try {
+        var saved = localStorage.getItem('sv_theme')
+        var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches
+        if (dark) {
+          document.documentElement.classList.add('dark')
+        }
+      } catch (e) {
+        /* storage unavailable: the page stays in light mode */
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

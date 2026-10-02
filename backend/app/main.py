@@ -6,7 +6,17 @@ from mangum import Mangum
 from pydantic import BaseModel
 
 from app import service
-from app.models import Fragment, FragmentIn, SearchResults, Song, SongIn
+from app.models import (
+    MAX_TAG_LENGTH,
+    MAX_TAGS,
+    Fragment,
+    FragmentIn,
+    Scope,
+    SearchResults,
+    Song,
+    SongIn,
+    TagCount,
+)
 
 app = FastAPI(title="SmartVibes Songwriter API")
 
@@ -99,6 +109,16 @@ def create_fragment(user_id: UserId, data: FragmentIn) -> Fragment:
     return service.create_fragment(user_id, data)
 
 
+@app.get("/fragments/random")
+def random_fragments(
+    user_id: UserId,
+    count: Annotated[int, Query(ge=1, le=10)] = 1,
+    tag: Annotated[str | None, Query(max_length=MAX_TAG_LENGTH)] = None,
+    exclude: Annotated[str | None, Query(max_length=100)] = None,
+) -> list[Fragment]:
+    return service.random_fragments(user_id, count, tag, exclude)
+
+
 @app.get("/fragments/{fragment_id}")
 def get_fragment(user_id: UserId, fragment_id: str) -> Fragment:
     return service.get_fragment(user_id, fragment_id)
@@ -120,9 +140,17 @@ def delete_fragment(user_id: UserId, fragment_id: str) -> Response:
 
 @app.get("/search")
 def search(
-    user_id: UserId, q: Annotated[str, Query(min_length=1, max_length=100)]
+    user_id: UserId,
+    q: Annotated[str, Query(max_length=100)] = "",
+    scope: Scope = "both",
+    tag: Annotated[list[str] | None, Query(max_length=MAX_TAGS)] = None,
 ) -> SearchResults:
-    return service.search(user_id, q)
+    return service.search(user_id, q, scope, tag)
+
+
+@app.get("/tags")
+def list_tags(user_id: UserId, scope: Scope = "both") -> list[TagCount]:
+    return service.list_tags(user_id, scope)
 
 
 # AWS Lambda entry point (API Gateway HTTP API, payload v2).

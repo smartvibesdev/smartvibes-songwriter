@@ -1,40 +1,32 @@
 import { useEffect, useState } from 'react'
+import { AppShell } from './AppShell'
 import { completeOAuthSignIn, getIdToken } from './auth'
 import { describeError } from './errors'
-import { Home } from './Home'
-import { SignInForm } from './SignInForm'
+import { SignInPage } from './SignInPage'
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+type Session = 'checking' | 'signedIn' | 'signedOut'
 
 function App() {
-  const [health, setHealth] = useState('checking...')
-  const [signedIn, setSignedIn] = useState(false)
+  const [session, setSession] = useState<Session>('checking')
   const [notice, setNotice] = useState('')
 
   useEffect(() => {
-    fetch(`${API_URL}/health`)
-      .then((r) => r.json())
-      .then((d) => setHealth(d.status))
-      .catch(() => setHealth('unreachable'))
-
     completeOAuthSignIn()
       .catch((err) => setNotice(describeError(err)))
       .then(() => getIdToken())
-      .then((token) => setSignedIn(Boolean(token)))
+      .then((token) => setSession(token ? 'signedIn' : 'signedOut'))
   }, [])
 
-  return (
-    <main>
-      <h1>SmartVibes Songwriter</h1>
-      <p>API status: {health}</p>
+  if (session === 'signedIn') {
+    return <AppShell onSignedOut={() => setSession('signedOut')} />
+  }
 
-      {signedIn ? (
-        <Home onSignedOut={() => setSignedIn(false)} />
-      ) : (
-        <SignInForm onSignedIn={() => setSignedIn(true)} notice={notice} />
-      )}
-    </main>
-  )
+  if (session === 'signedOut') {
+    return <SignInPage onSignedIn={() => setSession('signedIn')} notice={notice} />
+  }
+
+  // Still checking for a saved session: show nothing, so the sign-in form does not flash.
+  return null
 }
 
 export default App
