@@ -23,9 +23,11 @@ type HomeProps = {
 export function Home({ onSignedOut }: HomeProps) {
   const [tab, setTab] = useState<Tab>('songs')
   const [me, setMe] = useState('')
+  const [signingOut, setSigningOut] = useState(false)
 
-  function handleSignOut() {
-    signOut()
+  async function handleSignOut() {
+    setSigningOut(true)
+    await signOut()
     onSignedOut()
   }
 
@@ -51,7 +53,7 @@ export function Home({ onSignedOut }: HomeProps) {
             {label}
           </button>
         ))}{' '}
-        <button type="button" onClick={handleSignOut}>
+        <button type="button" onClick={handleSignOut} disabled={signingOut}>
           Sign out
         </button>
       </nav>
