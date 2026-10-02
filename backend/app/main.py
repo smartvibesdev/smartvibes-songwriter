@@ -11,6 +11,10 @@ from app.models import (
     MAX_TAGS,
     Fragment,
     FragmentIn,
+    ListParams,
+    NotebookEntry,
+    NotebookParams,
+    Page,
     Scope,
     SearchResults,
     Song,
@@ -71,8 +75,16 @@ def me(claims: Annotated[dict[str, str], Depends(get_claims)]) -> Me:
 
 
 @app.get("/songs")
-def list_songs(user_id: UserId) -> list[Song]:
-    return service.list_songs(user_id)
+def list_songs(user_id: UserId, params: Annotated[ListParams, Query()]) -> Page[Song]:
+    return service.query_songs(
+        user_id,
+        params.q,
+        params.tag,
+        params.year,
+        params.sort,
+        params.page,
+        params.page_size,
+    )
 
 
 @app.post("/songs", status_code=201)
@@ -100,8 +112,18 @@ def delete_song(user_id: UserId, song_id: str) -> Response:
 
 
 @app.get("/fragments")
-def list_fragments(user_id: UserId) -> list[Fragment]:
-    return service.list_fragments(user_id)
+def list_fragments(
+    user_id: UserId, params: Annotated[ListParams, Query()]
+) -> Page[Fragment]:
+    return service.query_fragments(
+        user_id,
+        params.q,
+        params.tag,
+        params.year,
+        params.sort,
+        params.page,
+        params.page_size,
+    )
 
 
 @app.post("/fragments", status_code=201)
@@ -133,6 +155,22 @@ def update_fragment(user_id: UserId, fragment_id: str, data: FragmentIn) -> Frag
 def delete_fragment(user_id: UserId, fragment_id: str) -> Response:
     service.delete_fragment(user_id, fragment_id)
     return Response(status_code=204)
+
+
+@app.get("/notebook")
+def list_notebook(
+    user_id: UserId, params: Annotated[NotebookParams, Query()]
+) -> Page[NotebookEntry]:
+    return service.query_notebook(
+        user_id,
+        params.q,
+        params.tag,
+        params.year,
+        params.sort,
+        params.page,
+        params.page_size,
+        params.scope,
+    )
 
 
 # --- Search ---

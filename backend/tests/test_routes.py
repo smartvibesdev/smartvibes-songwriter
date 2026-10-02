@@ -1,5 +1,8 @@
 """HTTP route tests: FastAPI test client over moto (a local fake of DynamoDB)."""
 
+from datetime import UTC, datetime
+
+import boto3
 import pytest
 from fastapi.testclient import TestClient
 
@@ -52,7 +55,7 @@ def test_song_lifecycle():
     assert {"id", "created_at", "updated_at"} <= song.keys()
 
     assert client.get(f"/songs/{song['id']}").json() == song
-    assert [s["id"] for s in client.get("/songs").json()] == [song["id"]]
+    assert [s["id"] for s in client.get("/songs").json()["items"]] == [song["id"]]
 
     updated = client.put(f"/songs/{song['id']}", json={"title": "New", "body": "x"})
     assert updated.status_code == 200
@@ -61,14 +64,14 @@ def test_song_lifecycle():
 
     assert client.delete(f"/songs/{song['id']}").status_code == 204
     assert client.get(f"/songs/{song['id']}").status_code == 404
-    assert client.get("/songs").json() == []
+    assert client.get("/songs").json()["items"] == []
 
 
 def test_invalid_song_is_rejected_with_422():
     sign_in_as("alice")
     assert client.post("/songs", json={"title": ""}).status_code == 422
     assert client.post("/songs", json={}).status_code == 422
-    assert client.get("/songs").json() == []
+    assert client.get("/songs").json()["items"] == []
 
 
 def test_missing_song_returns_404():
@@ -91,7 +94,9 @@ def test_fragment_lifecycle_with_tags():
     assert fragment["tags"] == ["love"]
 
     assert client.get(f"/fragments/{fragment['id']}").json() == fragment
-    assert [f["id"] for f in client.get("/fragments").json()] == [fragment["id"]]
+    assert [f["id"] for f in client.get("/fragments").json()["items"]] == [
+        fragment["id"]
+    ]
 
     updated = client.put(
         f"/fragments/{fragment['id']}", json={"text": "new", "tags": ["a"]}
@@ -120,8 +125,8 @@ def test_other_user_gets_404_and_empty_lists():
     fragment = client.post("/fragments", json={"text": "Mine"}).json()
 
     sign_in_as("bob")
-    assert client.get("/songs").json() == []
-    assert client.get("/fragments").json() == []
+    assert client.get("/songs").json()["items"] == []
+    assert client.get("/fragments").json()["items"] == []
     assert client.get(f"/songs/{song['id']}").status_code == 404
     assert client.get(f"/fragments/{fragment['id']}").status_code == 404
     assert (
@@ -150,7 +155,7 @@ def test_a_user_id_in_the_body_or_query_is_ignored():
         "/songs?user_id=alice", json={"title": "Bobs", "user_id": "alice"}
     )
     assert created.status_code == 201
-    assert [s["title"] for s in client.get("/songs?user_id=alice").json()] == ["Bobs"]
+    assert [s["title"] for s in client.get("/songs").json()["items"]] == ["Bobs"]
 
 
 # --- Through the real Lambda handler ---
@@ -196,10 +201,9 @@ def test_search_route_finds_my_items_only():
     assert [f["text"] for f in found.json()["fragments"]] == ["down by the river"]
 
     sign_in_as("bob")
-    assert client.get("/search", params={"q": "river"}).json() == {
-        "songs": [],
-        "fragments": [],
-    }
+    bobs = client.get("/search", params={"q": "river"}).json()
+    assert (bobs["songs"], bobs["fragments"]) == ([], [])
+    assert (bobs["song_total"], bobs["fragment_total"]) == (0, 0)
 
 
 def test_search_route_validates_its_parameters():
@@ -213,7 +217,7 @@ def test_search_route_validates_its_parameters():
 def test_search_with_nothing_to_look_for_returns_empty_results():
     sign_in_as("alice")
     client.post("/songs", json={"title": "River Song"})
-    empty = {"songs": [], "fragments": []}
+    empty = {"songs": [], "fragments": [], "song_total": 0, "fragment_total": 0}
     assert client.get("/search").json() == empty
     assert client.get("/search", params={"q": ""}).json() == empty
     assert client.get("/search", params={"q": "   "}).json() == empty
@@ -291,10 +295,8 @@ def test_tags_and_search_only_cover_my_items():
     client.post("/fragments", json={"text": "mine", "tags": ["secret"]})
     sign_in_as("bob")
     assert client.get("/tags").json() == []
-    assert client.get("/search", params={"tag": "secret"}).json() == {
-        "songs": [],
-        "fragments": [],
-    }
+    secret = client.get("/search", params={"tag": "secret"}).json()
+    assert (secret["songs"], secret["fragments"]) == ([], [])
     assert client.get("/fragments/random").json() == []
 
 
@@ -353,3 +355,201 @@ def test_random_fragment_still_returns_the_only_choice_when_it_is_excluded():
 def test_new_routes_require_authentication():
     assert client.get("/tags").status_code == 401
     assert client.get("/fragments/random").status_code == 401
+
+
+# --- Paged lists ---
+
+
+def _add_fragments(count: int, **fields) -> list[dict]:
+    return [
+        client.post("/fragments", json={"text": f"line {i}", **fields}).json()
+        for i in range(count)
+    ]
+
+
+def test_fragment_list_is_paged_newest_first_with_totals():
+    sign_in_as("alice")
+    made = _add_fragments(45)
+    first = client.get("/fragments").json()
+    assert (
+        first["total"],
+        first["all_count"],
+        first["page"],
+        first["pages"],
+        first["page_size"],
+    ) == (45, 45, 1, 3, 20)
+    assert [f["id"] for f in first["items"]] == [f["id"] for f in reversed(made)][:20]
+
+    last = client.get("/fragments", params={"page": 3}).json()
+    assert len(last["items"]) == 5
+    assert [f["id"] for f in last["items"]] == [f["id"] for f in reversed(made)][40:]
+
+
+def test_list_page_beyond_the_end_returns_the_last_page():
+    sign_in_as("alice")
+    _add_fragments(25)
+    far = client.get("/fragments", params={"page": 99}).json()
+    assert (far["page"], far["pages"], len(far["items"])) == (2, 2, 5)
+
+
+def test_list_sort_oldest_first():
+    sign_in_as("alice")
+    made = _add_fragments(3)
+    oldest = client.get("/fragments", params={"sort": "oldest"}).json()["items"]
+    assert [f["id"] for f in oldest] == [f["id"] for f in made]
+
+
+def test_list_filters_by_words_and_tags_and_reports_totals():
+    sign_in_as("alice")
+    client.post(
+        "/fragments", json={"text": "rain on glass", "tags": ["rain", "window"]}
+    )
+    client.post("/fragments", json={"text": "rain on tin", "tags": ["rain"]})
+    client.post("/fragments", json={"text": "sunny day", "tags": ["sun"]})
+
+    by_tag = client.get("/fragments", params=[("tag", "rain")]).json()
+    assert (by_tag["total"], by_tag["all_count"]) == (2, 3)
+
+    both = client.get("/fragments", params=[("tag", "rain"), ("tag", "window")]).json()
+    assert [f["text"] for f in both["items"]] == ["rain on glass"]
+
+    by_words = client.get("/fragments", params={"q": "tin"}).json()
+    assert [f["text"] for f in by_words["items"]] == ["rain on tin"]
+
+
+def test_list_year_filter_and_year_counts():
+    sign_in_as("alice")
+    old = client.post("/fragments", json={"text": "old one"}).json()
+    client.post("/fragments", json={"text": "new one"})
+    this_year = datetime.now(UTC).year
+
+    # Make one fragment look like it was written in 2019.
+    boto3.resource("dynamodb").Table("test-table").update_item(
+        Key={"PK": "USER#alice", "SK": f"FRAG#{old['id']}"},
+        UpdateExpression="SET created_at = :c",
+        ExpressionAttributeValues={":c": "2019-05-01T00:00:00+00:00"},
+    )
+
+    everything = client.get("/fragments").json()
+    assert [(y["year"], y["count"]) for y in everything["years"]] == [
+        (this_year, 1),
+        (2019, 1),
+    ]
+
+    only_2019 = client.get("/fragments", params={"year": 2019}).json()
+    assert [f["text"] for f in only_2019["items"]] == ["old one"]
+    # The year list ignores the year filter, so the other years stay visible.
+    assert len(only_2019["years"]) == 2
+
+    # The oldest fragment sorts by its created_at, not by when its ID was made.
+    oldest_first = client.get("/fragments", params={"sort": "oldest"}).json()["items"]
+    assert [f["text"] for f in oldest_first] == ["old one", "new one"]
+
+
+def test_song_list_is_paged_and_filterable():
+    sign_in_as("alice")
+    for i in range(23):
+        client.post(
+            "/songs",
+            json={"title": f"Song {i}", "tags": ["even" if i % 2 == 0 else "odd"]},
+        )
+    first = client.get("/songs").json()
+    assert (first["total"], first["pages"], len(first["items"])) == (23, 2, 20)
+    evens = client.get("/songs", params=[("tag", "even")]).json()
+    assert evens["total"] == 12
+
+
+def test_list_parameters_are_validated():
+    sign_in_as("alice")
+    assert client.get("/fragments", params={"page": 0}).status_code == 422
+    assert client.get("/fragments", params={"page_size": 101}).status_code == 422
+    assert client.get("/fragments", params={"sort": "sideways"}).status_code == 422
+    assert client.get("/fragments", params={"year": "abc"}).status_code == 422
+    assert client.get("/fragments", params={"q": "x" * 101}).status_code == 422
+    assert client.get("/fragments", params={"surprise": "1"}).status_code == 422
+    too_many = [("tag", f"t{i}") for i in range(11)]
+    assert client.get("/fragments", params=too_many).status_code == 422
+
+
+def test_search_returns_a_limited_first_batch_with_full_totals():
+    sign_in_as("alice")
+    _add_fragments(30, tags=["bulk"])
+    found = client.get("/search", params={"tag": "bulk", "scope": "fragments"}).json()
+    assert len(found["fragments"]) == 20
+    assert found["fragment_total"] == 30
+
+
+# --- Mixed list of songs and fragments (Home) ---
+
+
+def test_notebook_mixes_songs_and_fragments_newest_first_with_a_kind_on_each():
+    sign_in_as("alice")
+    song = client.post("/songs", json={"title": "A Song", "tags": ["rain"]}).json()
+    fragment = client.post(
+        "/fragments", json={"text": "a fragment", "tags": ["rain"]}
+    ).json()
+
+    both = client.get("/notebook").json()
+    assert [(e["kind"], e["id"]) for e in both["items"]] == [
+        ("fragment", fragment["id"]),
+        ("song", song["id"]),
+    ]
+    assert (both["total"], both["all_count"], both["pages"]) == (2, 2, 1)
+    assert both["items"][0]["text"] == "a fragment"
+    assert both["items"][1]["title"] == "A Song"
+
+
+def test_notebook_scope_limits_the_kinds_and_counts():
+    sign_in_as("alice")
+    client.post("/songs", json={"title": "A Song"})
+    client.post("/fragments", json={"text": "one"})
+    client.post("/fragments", json={"text": "two"})
+
+    songs = client.get("/notebook", params={"scope": "songs"}).json()
+    assert [e["kind"] for e in songs["items"]] == ["song"]
+    assert (songs["total"], songs["all_count"]) == (1, 1)
+
+    fragments = client.get("/notebook", params={"scope": "fragments"}).json()
+    assert [e["kind"] for e in fragments["items"]] == ["fragment", "fragment"]
+
+    assert client.get("/notebook", params={"scope": "nope"}).status_code == 422
+
+
+def test_notebook_filters_by_words_tags_year_and_pages():
+    sign_in_as("alice")
+    for i in range(15):
+        client.post(
+            "/songs",
+            json={"title": f"Song {i}", "tags": ["even" if i % 2 == 0 else "odd"]},
+        )
+    for i in range(15):
+        client.post(
+            "/fragments",
+            json={"text": f"line {i}", "tags": ["even" if i % 2 == 0 else "odd"]},
+        )
+
+    first = client.get("/notebook").json()
+    assert (first["total"], first["pages"], len(first["items"])) == (30, 2, 20)
+
+    evens = client.get("/notebook", params=[("tag", "even")]).json()
+    assert evens["total"] == 16
+    assert {e["kind"] for e in evens["items"]} == {"song", "fragment"}
+
+    words = client.get("/notebook", params={"q": "song 7"}).json()
+    assert [e["title"] for e in words["items"]] == ["Song 7"]
+
+    this_year = datetime.now(UTC).year
+    assert client.get("/notebook", params={"year": this_year}).json()["total"] == 30
+    assert client.get("/notebook", params={"year": 1999}).json()["total"] == 0
+
+
+def test_notebook_only_shows_my_items_and_requires_a_login():
+    sign_in_as("alice")
+    client.post("/songs", json={"title": "Mine"})
+    client.post("/fragments", json={"text": "mine"})
+    sign_in_as("bob")
+    bobs = client.get("/notebook").json()
+    assert (bobs["items"], bobs["total"], bobs["all_count"]) == ([], 0, 0)
+
+    app.dependency_overrides.clear()
+    assert client.get("/notebook").status_code == 401

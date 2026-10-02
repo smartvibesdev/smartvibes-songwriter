@@ -3,6 +3,7 @@ import { AppShell } from './AppShell'
 import { completeOAuthSignIn, getIdToken } from './auth'
 import { describeError } from './errors'
 import { SignInPage } from './SignInPage'
+import { AppStateProvider } from './state/AppStateProvider'
 
 type Session = 'checking' | 'signedIn' | 'signedOut'
 
@@ -18,7 +19,11 @@ function App() {
   }, [])
 
   if (session === 'signedIn') {
-    return <AppShell onSignedOut={() => setSession('signedOut')} />
+    return (
+      <AppStateProvider>
+        <AppShell onSignedOut={() => setSession('signedOut')} />
+      </AppStateProvider>
+    )
   }
 
   if (session === 'signedOut') {

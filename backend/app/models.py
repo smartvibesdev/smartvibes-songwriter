@@ -1,9 +1,9 @@
 """Request and response shapes for songs and fragments (plan section 5)."""
 
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Generic, Literal, TypeVar
 
-from pydantic import AfterValidator, BaseModel, StringConstraints
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 
 MAX_TITLE = 200
 MAX_SONG_BODY = 20_000
@@ -13,6 +13,12 @@ MAX_TAG_LENGTH = 30
 
 # Which kinds of item a search or tag list covers.
 Scope = Literal["both", "songs", "fragments"]
+
+# How a list is ordered: by when the item was created.
+Sort = Literal["newest", "oldest"]
+
+DEFAULT_PAGE_SIZE = 20
+MAX_PAGE_SIZE = 100
 
 
 def clean_tags(tags: list[str]) -> list[str]:
@@ -75,10 +81,16 @@ class Fragment(FragmentIn):
 
 
 class SearchResults(BaseModel):
-    """Keyword-search matches, grouped by kind. Each list is newest first."""
+    """Search matches, grouped by kind: the first few of each, newest first.
+
+    `song_total` and `fragment_total` count every match, so the screen can say
+    "showing 20 of 1,753".
+    """
 
     songs: list[Song]
     fragments: list[Fragment]
+    song_total: int = 0
+    fragment_total: int = 0
 
 
 class TagCount(BaseModel):
@@ -86,3 +98,63 @@ class TagCount(BaseModel):
 
     tag: str
     count: int
+
+
+class YearCount(BaseModel):
+    """A year and how many matching items were created in it."""
+
+    year: int
+    count: int
+
+
+ItemT = TypeVar("ItemT")
+
+
+class Page(BaseModel, Generic[ItemT]):
+    """One page of a filtered, sorted list of songs or fragments."""
+
+    items: list[ItemT]
+    # How many items match the current filters, across all pages.
+    total: int
+    # How many items of this kind exist, before any filter.
+    all_count: int
+    page: int
+    page_size: int
+    pages: int
+    # Years that have matches (ignoring the year filter), newest first.
+    years: list[YearCount]
+
+
+class ListParams(BaseModel):
+    """Query parameters for a song or fragment list."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    q: str = Field("", max_length=100)
+    tag: list[str] = Field(default_factory=list, max_length=MAX_TAGS)
+    year: int | None = Field(None, ge=1900, le=2200)
+    sort: Sort = "newest"
+    page: int = Field(1, ge=1)
+    page_size: int = Field(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE)
+
+
+class SongEntry(Song):
+    """A song in a mixed list of songs and fragments."""
+
+    kind: Literal["song"] = "song"
+
+
+class FragmentEntry(Fragment):
+    """A fragment in a mixed list of songs and fragments."""
+
+    kind: Literal["fragment"] = "fragment"
+
+
+# One row of the Home list: either a song or a fragment, told apart by `kind`.
+NotebookEntry = Annotated[SongEntry | FragmentEntry, Field(discriminator="kind")]
+
+
+class NotebookParams(ListParams):
+    """Query parameters for the mixed list on Home: the list parameters plus which kinds."""
+
+    scope: Scope = "both"

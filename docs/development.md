@@ -128,6 +128,10 @@ cd frontend
 VITE_API_URL=http://localhost:8000 npm run dev
 ```
 
+To try the lists, filters and paging at scale, start the API with `python dev_server.py --big`.
+It adds 5,000 generated fragments and 300 songs spread over 2018 to now. The fake database is
+slower than the real one, so pages take a few seconds to load; that is not what AWS will feel like.
+
 Open <http://localhost:5173/__preview-login>. That page pretends you are signed in and
 sends you to the app. It exists only in the dev server, and only when `VITE_API_URL`
 points at localhost; it is never part of a production build. The API ignores the
