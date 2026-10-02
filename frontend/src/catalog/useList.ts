@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ListQuery, Page, Scope, SortOrder } from '../api'
 import { describeError } from '../errors'
 import { toggleItem } from '../lists'
@@ -30,6 +30,13 @@ export function useList<Item>(list: (query: ListQuery) => Promise<Page<Item>>, o
   const [version, setVersion] = useState(0)
   const refreshKey = options.refreshKey ?? 0
 
+  // Everything that decides which page to ask for. A new object means a new request.
+  const request = useMemo(() => ({ query, version, refreshKey }), [query, version, refreshKey])
+  // The last request that has been answered. While it is not the current one, a request is on
+  // its way and the previous page stays on screen.
+  const [settled, setSettled] = useState<typeof request | null>(null)
+  const isSettled = settled === request
+
   // Typing in the search box: wait for a pause, then search from the first page.
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -44,23 +51,25 @@ export function useList<Item>(list: (query: ListQuery) => Promise<Page<Item>>, o
   useEffect(() => {
     let active = true
 
-    list(query)
+    list(request.query)
       .then((loaded) => {
         if (active) {
           setPage(loaded)
           setLoadError('')
+          setSettled(request)
         }
       })
       .catch((err) => {
         if (active) {
           setLoadError(describeError(err))
+          setSettled(request)
         }
       })
 
     return () => {
       active = false
     }
-  }, [list, query, version, refreshKey])
+  }, [list, request])
 
   const hasFilters = Boolean(query.q) || query.tags.length > 0 || Boolean(query.year)
 
@@ -104,6 +113,7 @@ export function useList<Item>(list: (query: ListQuery) => Promise<Page<Item>>, o
     query,
     hasFilters,
     version,
+    loading: isSettled === false,
     loadError,
     searchText,
     setSearchText,
