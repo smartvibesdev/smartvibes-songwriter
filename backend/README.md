@@ -9,6 +9,8 @@ uvicorn app.main:app --reload   # http://localhost:8000/health
 pytest
 ```
 
+To try the web app against this API without AWS, run `python dev_server.py` (sample data, fake sign-in). See "Try the app locally with sample data" in [development.md](../docs/development.md).
+
 ## Layout
 
 | File                  | What                                                                                    |
@@ -31,22 +33,45 @@ Cognito token). The user ID always comes from the token, never from the request.
 | `GET /health`                         | Public health check                    | 200     |
 | `GET /me`                             | The signed-in user's ID and email      | 200     |
 | `GET /songs`                          | List my songs, newest first            | 200     |
-| `POST /songs`                         | Create a song                          | 201     |
+| `POST /songs`                         | Create a song (title, body, tags)      | 201     |
 | `GET /songs/{id}`                     | Get one song                           | 200     |
-| `PUT /songs/{id}`                     | Replace a song's title and body        | 200     |
+| `PUT /songs/{id}`                     | Replace a song's title, body and tags  | 200     |
 | `DELETE /songs/{id}`                  | Delete a song                          | 204     |
 | `GET /fragments`                      | List my fragments, newest first        | 200     |
 | `POST /fragments`                     | Create a fragment (text, tags)         | 201     |
+| `GET /fragments/random`               | Random fragments (see below)           | 200     |
 | `GET /fragments/{id}`                 | Get one fragment                       | 200     |
 | `PUT /fragments/{id}`                 | Replace a fragment's text and tags     | 200     |
 | `DELETE /fragments/{id}`              | Delete a fragment                      | 204     |
-| `GET /search?q=...`                   | Keyword search over songs and fragments | 200     |
+| `GET /search`                         | Keyword and tag search (see below)     | 200     |
+| `GET /tags`                           | My tags with counts                    | 200     |
 
 A missing item (or one that belongs to someone else) returns 404. Invalid input
 returns 422.
 
 ### Search
 
-`q` is 1 to 100 characters. It is split into words, and an item matches when
-every word appears (case-insensitive) in a song's title or body, or a fragment's
-text or tags. The response is `{"songs": [...], "fragments": [...]}`.
+`GET /search` takes three optional parameters. At least a word or a tag is needed,
+or the result is empty.
+
+- `q`: up to 100 characters, split into words. An item matches when every word
+  appears (case-insensitive) in a song's title, body or tags, or a fragment's text
+  or tags.
+- `tag`: repeat it for several (`?tag=rain&tag=road`, at most 10). An item must
+  carry every tag. Tag-only searches are allowed.
+- `scope`: `both` (default), `songs` or `fragments`.
+
+The response is `{"songs": [...], "fragments": [...]}`.
+
+### Tags
+
+`GET /tags?scope=both|songs|fragments` returns `[{"tag": "rain", "count": 3}, ...]`,
+most used first, then alphabetical. Songs and fragments share the same tag rules:
+trimmed, lowercased, no duplicates, up to 10 per item and 30 characters each.
+
+### Random fragments
+
+`GET /fragments/random` returns a list of random fragments of the signed-in user.
+It takes `count` (1 to 10, default 1), `tag` (only fragments with that tag) and
+`exclude` (a fragment ID to avoid, so "another one" does not repeat the one on
+screen, unless it is the only choice). It uses no AI and costs no tokens.

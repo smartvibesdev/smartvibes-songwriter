@@ -41,7 +41,7 @@ Formatting is automatic: Prettier with no semicolons, single quotes and a 120-ch
 4. **Use positive logic.** Test for the thing you want, not for its opposite.
    - Do not use `!`, `!==` or `!=` in conditions when a positive form exists. Write `if (response.ok)`, not `if (!response.ok)`; use `Boolean(x)` where you need a boolean from a value.
    - Checking for absence with `=== null` or `=== undefined` is positive and fine, for example a guard such as `if (token === null) { throw ... }`.
-   - The one accepted exception is dropping an item from a collection, which has no positive form: keep `items.filter((item) => item.id !== id)` inside the small named helper `removeById` (`src/lists.ts`) and call that.
+   - The one accepted exception is dropping an item from a collection, which has no positive form: keep that `!==` inside a small named helper in `src/lists.ts` (`removeById`, `toggleItem`) and call the helper.
    - Never write `if (!a) { ... } else { ... }` or `a !== b ? x : y`. Swap the branches.
    - Put the main case inside the positive `if` and the failure or fallback after it.
    - If a condition is hard to read, name it: `const isFresh = expiresAt - now > 60_000`.

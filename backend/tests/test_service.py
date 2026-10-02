@@ -197,3 +197,115 @@ def test_search_never_returns_another_users_items():
     results = service.search(BOB, "river")
     assert results.songs == []
     assert results.fragments == []
+
+
+# --- Song tags, search scope and tag filters ---
+
+
+def test_song_tags_round_trip_and_update():
+    created = service.create_song(ALICE, SongIn(title="T", tags=["Rain"]))
+    assert service.get_song(ALICE, created.id).tags == ["rain"]
+    updated = service.update_song(ALICE, created.id, SongIn(title="T", tags=["road"]))
+    assert updated.tags == ["road"]
+
+
+def test_a_song_saved_before_tags_existed_reads_as_untagged():
+    import boto3
+
+    boto3.resource("dynamodb").Table("test-table").put_item(
+        Item={
+            "PK": f"USER#{ALICE}",
+            "SK": "SONG#old",
+            "title": "Old",
+            "body": "",
+            "created_at": "2026-10-01T00:00:00+00:00",
+            "updated_at": "2026-10-01T00:00:00+00:00",
+        }
+    )
+    assert service.get_song(ALICE, "old").tags == []
+
+
+def test_search_finds_songs_by_tag_text():
+    service.create_song(ALICE, SongIn(title="Plain", body="nothing", tags=["rain"]))
+    assert _titles(service.search(ALICE, "rain")) == ["Plain"]
+
+
+def test_search_scope_limits_the_kinds_returned():
+    service.create_song(ALICE, SongIn(title="River"))
+    service.create_fragment(ALICE, FragmentIn(text="river"))
+    both = service.search(ALICE, "river", scope="both")
+    songs = service.search(ALICE, "river", scope="songs")
+    fragments = service.search(ALICE, "river", scope="fragments")
+    assert (len(both.songs), len(both.fragments)) == (1, 1)
+    assert (len(songs.songs), len(songs.fragments)) == (1, 0)
+    assert (len(fragments.songs), len(fragments.fragments)) == (0, 1)
+
+
+def test_search_by_tag_alone_needs_every_tag():
+    service.create_fragment(ALICE, FragmentIn(text="one", tags=["rain", "road"]))
+    service.create_fragment(ALICE, FragmentIn(text="two", tags=["rain"]))
+    assert _texts(service.search(ALICE, tags=["rain"])) == ["one", "two"]
+    assert _texts(service.search(ALICE, tags=["Rain", " ROAD "])) == ["one"]
+    assert _texts(service.search(ALICE, tags=["rain", "missing"])) == []
+
+
+def test_search_combines_words_and_tags():
+    service.create_fragment(ALICE, FragmentIn(text="blue door", tags=["home"]))
+    service.create_fragment(ALICE, FragmentIn(text="blue sky", tags=["air"]))
+    assert _texts(service.search(ALICE, "blue", tags=["home"])) == ["blue door"]
+
+
+def test_search_with_no_words_and_no_tags_returns_nothing():
+    service.create_fragment(ALICE, FragmentIn(text="x", tags=["a"]))
+    assert service.search(ALICE, "", tags=[]).fragments == []
+    assert service.search(ALICE, "  ", tags=["  "]).fragments == []
+
+
+# --- Tag list ---
+
+
+def test_list_tags_counts_and_orders_by_use_then_name():
+    service.create_song(ALICE, SongIn(title="s", tags=["b", "a"]))
+    service.create_fragment(ALICE, FragmentIn(text="f1", tags=["a", "c"]))
+    service.create_fragment(ALICE, FragmentIn(text="f2", tags=["a"]))
+    pairs = [(t.tag, t.count) for t in service.list_tags(ALICE)]
+    assert pairs == [("a", 3), ("b", 1), ("c", 1)]
+    assert [(t.tag, t.count) for t in service.list_tags(ALICE, "songs")] == [
+        ("a", 1),
+        ("b", 1),
+    ]
+    assert [(t.tag, t.count) for t in service.list_tags(ALICE, "fragments")] == [
+        ("a", 2),
+        ("c", 1),
+    ]
+
+
+def test_list_tags_is_empty_with_no_tags_and_isolated_by_user():
+    service.create_song(ALICE, SongIn(title="s"))
+    service.create_fragment(BOB, FragmentIn(text="f", tags=["x"]))
+    assert service.list_tags(ALICE) == []
+
+
+# --- Random fragments ---
+
+
+def test_random_fragments_returns_distinct_fragments_up_to_count():
+    ids = {
+        service.create_fragment(ALICE, FragmentIn(text=f"t{i}")).id for i in range(4)
+    }
+    picked = service.random_fragments(ALICE, count=3)
+    assert len(picked) == 3
+    assert len({f.id for f in picked}) == 3
+    assert {f.id for f in picked} <= ids
+    assert len(service.random_fragments(ALICE, count=10)) == 4
+
+
+def test_random_fragments_is_empty_with_no_fragments_or_no_match():
+    assert service.random_fragments(ALICE) == []
+    service.create_fragment(ALICE, FragmentIn(text="x", tags=["a"]))
+    assert service.random_fragments(ALICE, tag="b") == []
+
+
+def test_random_fragments_never_returns_another_users_fragments():
+    service.create_fragment(ALICE, FragmentIn(text="mine"))
+    assert service.random_fragments(BOB) == []

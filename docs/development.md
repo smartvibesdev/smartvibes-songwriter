@@ -111,6 +111,31 @@ page talks to the deployed API (from `VITE_API_URL` in `.env.local`). To use
 your local backend instead, set `VITE_API_URL=http://localhost:8000`, then
 restart `npm run dev`.
 
+### Try the app locally with sample data
+
+The real API checks sign-in through AWS, so on its own it returns 401 for songs and
+fragments on your computer. `backend/dev_server.py` runs the real API code on a fake
+in-memory database (`moto`) with a pretend signed-in user and some sample songs and
+fragments. Nothing touches AWS, and nothing is saved: stop it and the data is gone.
+
+```bash
+# Terminal 1: the API, with sample data (http://127.0.0.1:8000)
+cd backend && source .venv/bin/activate
+python dev_server.py
+
+# Terminal 2: the web app, pointed at that API (http://localhost:5173)
+cd frontend
+VITE_API_URL=http://localhost:8000 npm run dev
+```
+
+Open <http://localhost:5173/__preview-login>. That page pretends you are signed in and
+sends you to the app. It exists only in the dev server, and only when `VITE_API_URL`
+points at localhost; it is never part of a production build. The API ignores the
+token, so there is nothing to type.
+
+Clicking Sign out in this mode may take you to the real Cognito sign-out page
+(harmless). Open the `__preview-login` link again to get back in.
+
 ### Run the checks (same ones CI runs on GitHub)
 
 ```bash

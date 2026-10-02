@@ -202,15 +202,154 @@ def test_search_route_finds_my_items_only():
     }
 
 
-def test_search_route_validates_the_query():
+def test_search_route_validates_its_parameters():
     sign_in_as("alice")
-    assert client.get("/search").status_code == 422
-    assert client.get("/search", params={"q": ""}).status_code == 422
     assert client.get("/search", params={"q": "x" * 101}).status_code == 422
-    blank = client.get("/search", params={"q": "   "})
-    assert blank.status_code == 200
-    assert blank.json() == {"songs": [], "fragments": []}
+    assert client.get("/search", params={"q": "a", "scope": "nope"}).status_code == 422
+    too_many = [("tag", f"t{i}") for i in range(11)]
+    assert client.get("/search", params=too_many).status_code == 422
+
+
+def test_search_with_nothing_to_look_for_returns_empty_results():
+    sign_in_as("alice")
+    client.post("/songs", json={"title": "River Song"})
+    empty = {"songs": [], "fragments": []}
+    assert client.get("/search").json() == empty
+    assert client.get("/search", params={"q": ""}).json() == empty
+    assert client.get("/search", params={"q": "   "}).json() == empty
 
 
 def test_search_requires_authentication():
     assert client.get("/search", params={"q": "river"}).status_code == 401
+
+
+# --- Search scope and tags ---
+
+
+def test_search_route_scope_and_tag_filters():
+    sign_in_as("alice")
+    client.post("/songs", json={"title": "River Song", "tags": ["Water"]})
+    client.post(
+        "/fragments", json={"text": "down by the river", "tags": ["water", "calm"]}
+    )
+    client.post("/fragments", json={"text": "river of cars", "tags": ["city"]})
+
+    songs_only = client.get("/search", params={"q": "river", "scope": "songs"}).json()
+    assert len(songs_only["songs"]) == 1
+    assert songs_only["fragments"] == []
+
+    fragments_only = client.get(
+        "/search", params={"q": "river", "scope": "fragments"}
+    ).json()
+    assert fragments_only["songs"] == []
+    assert len(fragments_only["fragments"]) == 2
+
+    by_tag = client.get("/search", params={"tag": "water"}).json()
+    assert len(by_tag["songs"]) == 1
+    assert [f["text"] for f in by_tag["fragments"]] == ["down by the river"]
+
+    both_tags = client.get("/search", params=[("tag", "water"), ("tag", "calm")]).json()
+    assert both_tags["songs"] == []
+    assert len(both_tags["fragments"]) == 1
+
+
+# --- Tags ---
+
+
+def test_songs_have_tags_that_are_cleaned_up():
+    sign_in_as("alice")
+    created = client.post(
+        "/songs", json={"title": "Tagged", "tags": ["Rain ", "rain", "ROAD"]}
+    )
+    assert created.json()["tags"] == ["rain", "road"]
+    assert client.get(f"/songs/{created.json()['id']}").json()["tags"] == [
+        "rain",
+        "road",
+    ]
+
+
+def test_tags_route_counts_tags_across_songs_and_fragments():
+    sign_in_as("alice")
+    client.post("/songs", json={"title": "A", "tags": ["rain", "road"]})
+    client.post("/fragments", json={"text": "x", "tags": ["rain"]})
+    client.post("/fragments", json={"text": "y", "tags": ["rain", "night"]})
+
+    assert client.get("/tags").json() == [
+        {"tag": "rain", "count": 3},
+        {"tag": "night", "count": 1},
+        {"tag": "road", "count": 1},
+    ]
+    assert client.get("/tags", params={"scope": "songs"}).json() == [
+        {"tag": "rain", "count": 1},
+        {"tag": "road", "count": 1},
+    ]
+    assert client.get("/tags", params={"scope": "nope"}).status_code == 422
+
+
+def test_tags_and_search_only_cover_my_items():
+    sign_in_as("alice")
+    client.post("/fragments", json={"text": "mine", "tags": ["secret"]})
+    sign_in_as("bob")
+    assert client.get("/tags").json() == []
+    assert client.get("/search", params={"tag": "secret"}).json() == {
+        "songs": [],
+        "fragments": [],
+    }
+    assert client.get("/fragments/random").json() == []
+
+
+# --- Random fragments ---
+
+
+def test_random_fragment_route_returns_one_of_my_fragments():
+    sign_in_as("alice")
+    ids = {
+        client.post("/fragments", json={"text": f"line {i}"}).json()["id"]
+        for i in range(3)
+    }
+
+    picked = client.get("/fragments/random")
+    assert picked.status_code == 200
+    assert len(picked.json()) == 1
+    assert picked.json()[0]["id"] in ids
+
+
+def test_random_fragment_route_is_not_mistaken_for_a_fragment_id():
+    sign_in_as("alice")
+    assert client.get("/fragments/random").status_code == 200
+    assert client.get("/fragments/random").json() == []
+
+
+def test_random_fragment_route_count_tag_and_exclude():
+    sign_in_as("alice")
+    rain = client.post("/fragments", json={"text": "rain one", "tags": ["rain"]}).json()
+    client.post("/fragments", json={"text": "rain two", "tags": ["rain"]})
+    client.post("/fragments", json={"text": "sun", "tags": ["sun"]})
+
+    several = client.get("/fragments/random", params={"count": 10}).json()
+    assert len(several) == 3
+    assert len({f["id"] for f in several}) == 3
+
+    tagged = client.get("/fragments/random", params={"count": 10, "tag": "Rain"}).json()
+    assert {f["text"] for f in tagged} == {"rain one", "rain two"}
+
+    for _ in range(10):
+        other = client.get(
+            "/fragments/random", params={"tag": "rain", "exclude": rain["id"]}
+        )
+        assert other.json()[0]["text"] == "rain two"
+
+    assert client.get("/fragments/random", params={"count": 0}).status_code == 422
+    assert client.get("/fragments/random", params={"count": 11}).status_code == 422
+
+
+def test_random_fragment_still_returns_the_only_choice_when_it_is_excluded():
+    sign_in_as("alice")
+    only = client.post("/fragments", json={"text": "alone"}).json()
+    picked = client.get("/fragments/random", params={"exclude": only["id"]}).json()
+    assert [f["id"] for f in picked] == [only["id"]]
+
+
+def test_new_routes_require_authentication():
+    assert client.get("/tags").status_code == 401
+    assert client.get("/fragments/random").status_code == 401
