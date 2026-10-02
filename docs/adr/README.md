@@ -20,3 +20,5 @@ Format: [0000-template.md](0000-template.md)
 | [0009](0009-google-account-chooser-through-managed-login.md) | Google account chooser through Cognito managed login | Accepted |
 | [0010](0010-search-scope-tags-and-random-fragments.md) | Search scope, song tags and random fragments | Accepted |
 | [0011](0011-frontend-styling-tailwind-and-theme-tokens.md) | Frontend styling: Tailwind, theme tokens and light/dark mode | Accepted |
+| [0012](0012-paged-lists-for-thousands-of-items.md) | Paged lists and filters for thousands of items | Accepted |
+| [0013](0013-app-level-state-for-the-screens.md) | App-level state for the screens | Accepted |

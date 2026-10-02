@@ -10,7 +10,35 @@ export type Song = SongInput & { id: string; created_at: string; updated_at: str
 export type FragmentInput = { text: string; tags: string[] }
 export type Fragment = FragmentInput & { id: string; created_at: string; updated_at: string }
 
-export type SearchResults = { songs: Song[]; fragments: Fragment[] }
+/** The first few matches of each kind, plus how many matched in all. */
+export type SearchResults = { songs: Song[]; fragments: Fragment[]; song_total: number; fragment_total: number }
+
+export type SortOrder = 'newest' | 'oldest'
+
+export type YearCount = { year: number; count: number }
+
+/** One page of a filtered, sorted list. */
+export type Page<Item> = {
+  items: Item[]
+  /** How many items match the current filters, across all pages. */
+  total: number
+  /** How many items of this kind exist, before any filter. */
+  all_count: number
+  page: number
+  page_size: number
+  pages: number
+  /** Years that have matches (ignoring the year filter), newest first. */
+  years: YearCount[]
+}
+
+/**
+ * What a song, fragment or mixed list is showing: words, tags, year, order and page number.
+ * `scope` only applies to the mixed list on Home (which kinds to include).
+ */
+export type ListQuery = { q: string; tags: string[]; year: number | null; sort: SortOrder; page: number; scope?: Scope }
+
+/** One row of the mixed list on Home: a song or a fragment, told apart by `kind`. */
+export type NotebookEntry = (Song & { kind: 'song' }) | (Fragment & { kind: 'fragment' })
 
 /** Which kinds of item a search or tag list covers. */
 export type Scope = 'both' | 'songs' | 'fragments'
@@ -100,9 +128,31 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   throw new ApiError(response.status, errorMessage(response.status, data))
 }
 
+/** The URL query string for a list request. */
+function listParams(query: ListQuery): string {
+  const params = new URLSearchParams({ q: query.q, sort: query.sort, page: String(query.page) })
+
+  if (query.year) {
+    params.set('year', String(query.year))
+  }
+
+  if (query.scope) {
+    params.set('scope', query.scope)
+  }
+
+  for (const tag of query.tags) {
+    params.append('tag', tag)
+  }
+
+  return params.toString()
+}
+
+/** One page of songs and fragments together (Home). */
+export const listNotebook = (query: ListQuery) => request<Page<NotebookEntry>>('GET', `/notebook?${listParams(query)}`)
+
 // --- Songs ---
 
-export const listSongs = () => request<Song[]>('GET', '/songs')
+export const listSongs = (query: ListQuery) => request<Page<Song>>('GET', `/songs?${listParams(query)}`)
 
 export const getSong = (id: string) => request<Song>('GET', `/songs/${encodeURIComponent(id)}`)
 
@@ -115,7 +165,7 @@ export const deleteSong = (id: string) => request<void>('DELETE', `/songs/${enco
 
 // --- Fragments ---
 
-export const listFragments = () => request<Fragment[]>('GET', '/fragments')
+export const listFragments = (query: ListQuery) => request<Page<Fragment>>('GET', `/fragments?${listParams(query)}`)
 
 export const getFragment = (id: string) => request<Fragment>('GET', `/fragments/${encodeURIComponent(id)}`)
 

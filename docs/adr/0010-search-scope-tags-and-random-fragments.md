@@ -5,7 +5,7 @@
 
 ## Context
 
-Week 2 shipped keyword search over songs and fragments (ADR 0007). The Explore
+Week 2 shipped keyword search over songs and fragments (ADR 0007). The Home
 screen needs more: search only songs or only fragments, filter by tag, and pull a
 random fragment to spark ideas. Only fragments had tags, and the plan lists tags
 for fragments as a later feature that was already stored.
@@ -39,7 +39,7 @@ for fragments as a later feature that was already stored.
 
 ## Consequences
 
-- The Explore screen can filter by scope and tag chips, and offer "another one".
+- The Home screen can filter by scope and tag chips, and offer "another one".
 - Tags are not unique per user in the database, so counting means loading the
   user's items. Fine at this scale; if it grows, keep a tag index item per user.
 - Search and tag counts get slower with very large collections, as in ADR 0007.

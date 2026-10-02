@@ -32,22 +32,46 @@ Cognito token). The user ID always comes from the token, never from the request.
 | ------------------------------------- | -------------------------------------- | ------- |
 | `GET /health`                         | Public health check                    | 200     |
 | `GET /me`                             | The signed-in user's ID and email      | 200     |
-| `GET /songs`                          | List my songs, newest first            | 200     |
+| `GET /songs`                          | One page of my songs (see below)       | 200     |
 | `POST /songs`                         | Create a song (title, body, tags)      | 201     |
 | `GET /songs/{id}`                     | Get one song                           | 200     |
 | `PUT /songs/{id}`                     | Replace a song's title, body and tags  | 200     |
 | `DELETE /songs/{id}`                  | Delete a song                          | 204     |
-| `GET /fragments`                      | List my fragments, newest first        | 200     |
+| `GET /fragments`                      | One page of my fragments (see below)   | 200     |
 | `POST /fragments`                     | Create a fragment (text, tags)         | 201     |
 | `GET /fragments/random`               | Random fragments (see below)           | 200     |
 | `GET /fragments/{id}`                 | Get one fragment                       | 200     |
 | `PUT /fragments/{id}`                 | Replace a fragment's text and tags     | 200     |
 | `DELETE /fragments/{id}`              | Delete a fragment                      | 204     |
+| `GET /notebook`                       | One page of songs and fragments together (Home) | 200 |
 | `GET /search`                         | Keyword and tag search (see below)     | 200     |
 | `GET /tags`                           | My tags with counts                    | 200     |
 
 A missing item (or one that belongs to someone else) returns 404. Invalid input
 returns 422.
+
+### Lists are paged
+
+`GET /songs` and `GET /fragments` return one page of 20 (up to 100 with `page_size`),
+not everything, so they stay usable with thousands of items. Parameters, all optional:
+
+- `q`: words; each must appear in the item (a song's title, body or tags, or a fragment's text or tags).
+- `tag`: repeat it for several (at most 10); an item must carry every one.
+- `year`: only items created in that year.
+- `sort`: `newest` (default) or `oldest`, by creation date.
+- `page`: 1 or more. A page past the end returns the last page.
+
+The response is `{"items": [...], "total", "all_count", "page", "page_size", "pages", "years"}`:
+`total` counts matches across all pages, `all_count` counts every item of that kind, and
+`years` lists the years that have matches (ignoring the `year` filter), newest first, with a
+count each, for a year picker. Unknown parameters return 422.
+
+### The mixed list (Home)
+
+`GET /notebook` works like the two lists above (same `q`, `tag`, `year`, `sort`, `page`,
+`page_size` and the same response shape) and adds `scope`: `songs`, `fragments` or `both`
+(default). Each item has a `kind` (`song` or `fragment`) and the fields of that kind. They are
+sorted together by creation date. `GET /search` still exists but the web app no longer uses it.
 
 ### Search
 
@@ -61,7 +85,7 @@ or the result is empty.
   carry every tag. Tag-only searches are allowed.
 - `scope`: `both` (default), `songs` or `fragments`.
 
-The response is `{"songs": [...], "fragments": [...]}`.
+The response is `{"songs": [...], "fragments": [...], "song_total": 0, "fragment_total": 0}`: only the first 20 matches of each kind, with the full counts.
 
 ### Tags
 

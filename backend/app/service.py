@@ -5,11 +5,13 @@ share it. Every function takes `user_id` first, and every key is built from it, 
 one user's calls can only ever reach that user's partition (`USER#<user_id>`).
 """
 
+import math
 import os
 import random
 import secrets
 import time
 from collections import Counter
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -18,13 +20,20 @@ from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
 from app.models import (
+    DEFAULT_PAGE_SIZE,
     Fragment,
+    FragmentEntry,
     FragmentIn,
+    NotebookEntry,
+    Page,
     Scope,
     SearchResults,
     Song,
+    SongEntry,
     SongIn,
+    Sort,
     TagCount,
+    YearCount,
 )
 
 SONG_PREFIX = "SONG#"
@@ -70,14 +79,26 @@ def _create(user_id: str, prefix: str, attributes: dict[str, Any]) -> dict[str, 
     return {**item, "id": item_id}
 
 
-def _list(user_id: str, prefix: str) -> list[dict[str, Any]]:
-    """All of this user's items of one kind, newest first."""
+def _list(
+    user_id: str, prefix: str, attributes: list[str] | None = None
+) -> list[dict[str, Any]]:
+    """All of this user's items of one kind, newest first.
+
+    `attributes` limits which fields DynamoDB sends back (the sort key is always
+    included). Asking for less is faster when only a few fields are needed.
+    """
     table = _table()
-    query = {
+    query: dict[str, Any] = {
         "KeyConditionExpression": Key("PK").eq(_pk(user_id))
         & Key("SK").begins_with(prefix),
         "ScanIndexForward": False,
     }
+
+    if attributes:
+        names = {f"#a{i}": name for i, name in enumerate(["SK", *attributes])}
+        query["ProjectionExpression"] = ", ".join(names)
+        query["ExpressionAttributeNames"] = names
+
     items: list[dict[str, Any]] = []
     while True:
         page = table.query(**query)
@@ -201,61 +222,236 @@ def _normalize_tags(tags: list[str] | None) -> list[str]:
     return [tag.strip().lower() for tag in tags or [] if tag.strip()]
 
 
+def _year_of(item: dict[str, Any]) -> int:
+    """The year an item was created, from its ISO timestamp ("2026-10-01T...")."""
+    return int(item["created_at"][:4])
+
+
+def _query_items(
+    user_id: str,
+    prefix: str,
+    searchable: Callable[[dict[str, Any]], list[str]],
+    build: Callable[[dict[str, Any]], Any],
+    *,
+    q: str,
+    tags: list[str] | None,
+    year: int | None,
+    sort: Sort,
+    page: int,
+    page_size: int,
+) -> Page:
+    """Filter, sort and page one kind of item.
+
+    Loads all of the user's items of that kind and works on the raw records, so the
+    (slower) model objects are built only for the one page that is returned.
+    """
+    items = _list(user_id, prefix)
+    terms = q.lower().split()
+    wanted = _normalize_tags(tags)
+
+    matching = [
+        item
+        for item in items
+        if _matches(terms, *searchable(item))
+        and _has_all_tags(item.get("tags", []), wanted)
+    ]
+
+    year_counts = Counter(_year_of(item) for item in matching)
+    years = [
+        YearCount(year=y, count=year_counts[y])
+        for y in sorted(year_counts, reverse=True)
+    ]
+
+    if year is not None:
+        matching = [item for item in matching if _year_of(item) == year]
+
+    matching.sort(
+        key=lambda item: (item["created_at"], item["id"]), reverse=(sort == "newest")
+    )
+
+    pages = max(1, math.ceil(len(matching) / page_size))
+    page = min(max(page, 1), pages)
+    first = (page - 1) * page_size
+
+    return Page(
+        items=[build(item) for item in matching[first : first + page_size]],
+        total=len(matching),
+        all_count=len(items),
+        page=page,
+        page_size=page_size,
+        pages=pages,
+        years=years,
+    )
+
+
+def query_songs(
+    user_id: str,
+    q: str = "",
+    tags: list[str] | None = None,
+    year: int | None = None,
+    sort: Sort = "newest",
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> Page[Song]:
+    """One page of this user's songs matching the words, tags and year."""
+    return _query_items(
+        user_id,
+        SONG_PREFIX,
+        lambda item: [item["title"], item.get("body", ""), *item.get("tags", [])],
+        lambda item: Song(**item),
+        q=q,
+        tags=tags,
+        year=year,
+        sort=sort,
+        page=page,
+        page_size=page_size,
+    )
+
+
+def query_fragments(
+    user_id: str,
+    q: str = "",
+    tags: list[str] | None = None,
+    year: int | None = None,
+    sort: Sort = "newest",
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> Page[Fragment]:
+    """One page of this user's fragments matching the words, tags and year."""
+    return _query_items(
+        user_id,
+        FRAGMENT_PREFIX,
+        lambda item: [item["text"], *item.get("tags", [])],
+        lambda item: Fragment(**item),
+        q=q,
+        tags=tags,
+        year=year,
+        sort=sort,
+        page=page,
+        page_size=page_size,
+    )
+
+
+def query_notebook(
+    user_id: str,
+    q: str = "",
+    tags: list[str] | None = None,
+    year: int | None = None,
+    sort: Sort = "newest",
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    scope: Scope = "both",
+) -> Page[NotebookEntry]:
+    """One page of songs and fragments together, filtered and sorted like the separate lists.
+
+    `scope` limits it to songs or fragments. Each entry says which it is in `kind`.
+    """
+    entries: list[tuple[str, dict[str, Any]]] = []
+
+    if scope in ("both", "songs"):
+        entries += [("song", item) for item in _list(user_id, SONG_PREFIX)]
+
+    if scope in ("both", "fragments"):
+        entries += [("fragment", item) for item in _list(user_id, FRAGMENT_PREFIX)]
+
+    terms = q.lower().split()
+    wanted = _normalize_tags(tags)
+
+    def words_of(kind: str, item: dict[str, Any]) -> list[str]:
+        if kind == "song":
+            return [item["title"], item.get("body", ""), *item.get("tags", [])]
+
+        return [item["text"], *item.get("tags", [])]
+
+    matching = [
+        (kind, item)
+        for kind, item in entries
+        if _matches(terms, *words_of(kind, item))
+        and _has_all_tags(item.get("tags", []), wanted)
+    ]
+
+    year_counts = Counter(_year_of(item) for _, item in matching)
+    years = [
+        YearCount(year=y, count=year_counts[y])
+        for y in sorted(year_counts, reverse=True)
+    ]
+
+    if year is not None:
+        matching = [(kind, item) for kind, item in matching if _year_of(item) == year]
+
+    matching.sort(
+        key=lambda entry: (entry[1]["created_at"], entry[1]["id"]),
+        reverse=(sort == "newest"),
+    )
+
+    pages = max(1, math.ceil(len(matching) / page_size))
+    page = min(max(page, 1), pages)
+    first = (page - 1) * page_size
+
+    def build(kind: str, item: dict[str, Any]) -> SongEntry | FragmentEntry:
+        if kind == "song":
+            return SongEntry(**item)
+
+        return FragmentEntry(**item)
+
+    return Page(
+        items=[build(kind, item) for kind, item in matching[first : first + page_size]],
+        total=len(matching),
+        all_count=len(entries),
+        page=page,
+        page_size=page_size,
+        pages=pages,
+        years=years,
+    )
+
+
 def search(
     user_id: str,
     query: str = "",
     scope: Scope = "both",
     tags: list[str] | None = None,
+    limit: int = DEFAULT_PAGE_SIZE,
 ) -> SearchResults:
-    """Keyword and tag search over this user's songs and fragments.
-
-    DynamoDB has no full-text search, so this loads the user's own items and filters
-    them in Python. That is fine at a few hundred items per user.
+    """Keyword and tag search over this user's songs and fragments, newest first.
 
     Every word in `query` must appear somewhere in the item (a song's title, body or
     tags, or a fragment's text or tags). Every tag in `tags` must be on the item.
     `scope` limits the search to songs or fragments. With neither words nor tags,
-    nothing matches.
+    nothing matches. Only the first `limit` matches of each kind are returned, along
+    with how many matched in all.
     """
-    terms = query.lower().split()
-    wanted = _normalize_tags(tags)
-
-    if not terms and not wanted:
+    if not query.split() and not _normalize_tags(tags):
         return SearchResults(songs=[], fragments=[])
 
-    songs: list[Song] = []
-    fragments: list[Fragment] = []
+    songs = None
+    fragments = None
 
     if scope in ("both", "songs"):
-        songs = [
-            song
-            for song in list_songs(user_id)
-            if _matches(terms, song.title, song.body, *song.tags)
-            and _has_all_tags(song.tags, wanted)
-        ]
+        songs = query_songs(user_id, query, tags, page_size=limit)
 
     if scope in ("both", "fragments"):
-        fragments = [
-            fragment
-            for fragment in list_fragments(user_id)
-            if _matches(terms, fragment.text, *fragment.tags)
-            and _has_all_tags(fragment.tags, wanted)
-        ]
+        fragments = query_fragments(user_id, query, tags, page_size=limit)
 
-    return SearchResults(songs=songs, fragments=fragments)
+    return SearchResults(
+        songs=songs.items if songs else [],
+        fragments=fragments.items if fragments else [],
+        song_total=songs.total if songs else 0,
+        fragment_total=fragments.total if fragments else 0,
+    )
 
 
 def list_tags(user_id: str, scope: Scope = "both") -> list[TagCount]:
     """Every tag this user has used, most used first (ties alphabetical)."""
     counts: Counter[str] = Counter()
+    prefixes = {
+        "songs": [SONG_PREFIX],
+        "fragments": [FRAGMENT_PREFIX],
+        "both": [SONG_PREFIX, FRAGMENT_PREFIX],
+    }[scope]
 
-    if scope in ("both", "songs"):
-        for song in list_songs(user_id):
-            counts.update(song.tags)
-
-    if scope in ("both", "fragments"):
-        for fragment in list_fragments(user_id):
-            counts.update(fragment.tags)
+    for prefix in prefixes:
+        for item in _list(user_id, prefix, ["tags"]):
+            counts.update(item.get("tags", []))
 
     ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
 
@@ -272,15 +468,17 @@ def random_fragments(
 
     `tag` limits the pool to fragments with that tag. `exclude` is an ID to avoid (the
     fragment already on screen) so "another one" does not repeat it, unless it is the
-    only choice.
+    only choice. Only the keys (and tags, when filtering) are read to choose; the chosen
+    fragments are then fetched in full.
     """
-    pool = list_fragments(user_id)
     wanted = tag.strip().lower() if tag else ""
+    pool = _list(user_id, FRAGMENT_PREFIX, ["tags"] if wanted else None)
 
     if wanted:
-        pool = [fragment for fragment in pool if wanted in fragment.tags]
+        pool = [item for item in pool if wanted in item.get("tags", [])]
 
-    others = [fragment for fragment in pool if fragment.id != exclude]
+    others = [item for item in pool if item["id"] != exclude]
     choices = others or pool
+    chosen = random.sample(choices, min(count, len(choices)))
 
-    return random.sample(choices, min(count, len(choices)))
+    return [get_fragment(user_id, item["id"]) for item in chosen]
