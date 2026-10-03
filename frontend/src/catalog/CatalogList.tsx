@@ -80,10 +80,13 @@ export function CatalogList<Item extends { id: string }>(props: CatalogListProps
 
       {page.items.length > 0 && (
         <ul
-          className={`overflow-hidden rounded-3xl border border-border bg-card shadow-card transition-opacity lg:min-h-0 lg:overflow-y-auto ${busyClasses}`}
+          className={`flex flex-col gap-3 transition-opacity sm:block sm:overflow-hidden sm:rounded-3xl sm:border sm:border-border sm:bg-card sm:shadow-card lg:min-h-0 lg:overflow-y-auto ${busyClasses}`}
         >
           {page.items.map((item) => (
-            <li key={item.id} className="border-b border-border last:border-b-0">
+            <li
+              key={item.id}
+              className="overflow-hidden rounded-2xl border border-border bg-card shadow-card sm:overflow-visible sm:rounded-none sm:border-0 sm:border-b sm:bg-transparent sm:shadow-none sm:last:border-b-0"
+            >
               {renderRow(item)}
             </li>
           ))}
