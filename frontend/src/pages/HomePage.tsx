@@ -41,7 +41,7 @@ export function HomePage() {
   const newMenu = <NewMenu onNewFragment={() => setComposing('fragment')} onNewSong={() => setComposing('song')} />
 
   return (
-    <div className="flex flex-col gap-9 lg:h-full lg:gap-5">
+    <div className="flex flex-col gap-4 sm:gap-9 lg:h-full lg:gap-5">
       <div className="hidden flex-wrap items-center justify-between gap-4 sm:flex">
         {/* The top nav already says Home, so phones skip the title. */}
         <div className="hidden sm:block">
