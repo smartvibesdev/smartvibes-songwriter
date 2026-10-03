@@ -59,7 +59,7 @@ export function HomePage() {
       </div>
 
       <CatalogToolbar
-        placeholder="Search your songs and fragments…"
+        placeholder="Search songs and fragments"
         phoneAction={newMenu}
         searchText={notebook.searchText}
         onSearchText={notebook.setSearchText}
