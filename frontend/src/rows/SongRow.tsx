@@ -37,7 +37,7 @@ export function SongRow({ song, editing, showKind, onEdit, onCancelEdit, onSave,
             </p>
           )}
 
-          <h2 className="font-display text-xl font-semibold">{song.title}</h2>
+          <h2 className="font-display text-lg font-semibold sm:text-xl">{song.title}</h2>
         </div>
 
         {song.body && <p className="line-clamp-2 leading-snug whitespace-pre-line text-soft">{song.body}</p>}
