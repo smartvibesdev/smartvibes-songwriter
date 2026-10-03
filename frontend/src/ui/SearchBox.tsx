@@ -20,7 +20,7 @@ export function SearchBox({ value, onChange, label, placeholder }: SearchBoxProp
         value={value}
         onChange={(e) => onChange(e.target.value)}
         maxLength={100}
-        className="w-full min-w-0 bg-transparent py-4 text-lg text-ellipsis sm:py-5 text-foreground outline-none placeholder:text-muted lg:py-3"
+        className="w-full min-w-0 bg-transparent py-4 text-base text-ellipsis sm:py-5 sm:text-lg text-foreground outline-none placeholder:text-muted lg:py-3"
       />
 
       {value && (

@@ -28,6 +28,9 @@ type CatalogToolbarProps = {
   phoneAction?: ReactNode
 }
 
+// On phones the four labels (Year, Tags, Show, Sort) are equally wide, so the controls line up in both columns.
+const LABEL_WIDTH = 'w-10 sm:w-auto'
+
 // Year, Show and Sort are all this wide, so the row looks even.
 const SELECT_WIDTH = 'w-28'
 
@@ -88,7 +91,7 @@ export function CatalogToolbar(props: CatalogToolbarProps) {
       <div className="grid grid-cols-2 items-center gap-x-4 gap-y-3 sm:flex sm:flex-wrap sm:justify-between sm:gap-x-8">
         <div className="contents sm:flex sm:flex-wrap sm:items-center sm:gap-x-8 sm:gap-y-3">
           <label className="flex items-center gap-2.5">
-            <FieldLabel>Year</FieldLabel>
+            <FieldLabel className={LABEL_WIDTH}>Year</FieldLabel>
 
             <Select
               className={SELECT_WIDTH}
@@ -104,7 +107,7 @@ export function CatalogToolbar(props: CatalogToolbarProps) {
             </Select>
           </label>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-2 sm:gap-3">
-            <FieldLabel className="sm:-mr-1">Tags</FieldLabel>
+            <FieldLabel className={`${LABEL_WIDTH} sm:-mr-1`}>Tags</FieldLabel>
 
             {selectedTags.map((tag) => (
               <button
@@ -168,7 +171,7 @@ export function CatalogToolbar(props: CatalogToolbarProps) {
         <div className="contents sm:flex sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-3">
           {props.scope && props.onScope && (
             <label className="flex items-center gap-2.5">
-              <FieldLabel>Show</FieldLabel>
+              <FieldLabel className={LABEL_WIDTH}>Show</FieldLabel>
 
               <Select
                 className={SELECT_WIDTH}
@@ -183,7 +186,7 @@ export function CatalogToolbar(props: CatalogToolbarProps) {
           )}
 
           <label className="flex items-center gap-2.5">
-            <FieldLabel>Sort</FieldLabel>
+            <FieldLabel className={LABEL_WIDTH}>Sort</FieldLabel>
 
             <Select
               className={SELECT_WIDTH}
