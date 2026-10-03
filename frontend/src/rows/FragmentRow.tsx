@@ -33,7 +33,7 @@ export function FragmentRow({ fragment, editing, showKind, onEdit, onCancelEdit,
   }
 
   return (
-    <div className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:gap-6 sm:px-8 lg:py-3.5">
+    <div className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:gap-6 sm:px-8 sm:py-5 lg:py-3.5">
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {showKind && <p className="text-[11px] font-semibold tracking-[0.12em] text-accent-text uppercase">Fragment</p>}
 
@@ -42,16 +42,19 @@ export function FragmentRow({ fragment, editing, showKind, onEdit, onCancelEdit,
         {fragment.tags.length > 0 && <p className="text-[13px] text-muted">{hashTags(fragment.tags)}</p>}
       </div>
 
-      <p className="text-sm whitespace-nowrap text-muted">{formatDate(fragment.created_at)}</p>
+      {/* Phones: the date at the left and the buttons at the right of one line. */}
+      <div className="flex items-center justify-between gap-6 sm:contents">
+        <p className="text-sm whitespace-nowrap text-muted">{formatDate(fragment.created_at)}</p>
 
-      <div className="flex gap-4">
-        <Button variant="link" className="text-sm" onClick={onEdit}>
-          Edit
-        </Button>
+        <div className="flex gap-4">
+          <Button variant="link" className="text-sm" onClick={onEdit}>
+            Edit
+          </Button>
 
-        <Button variant="quiet" className="text-sm" onClick={onDelete}>
-          Delete
-        </Button>
+          <Button variant="quiet" className="text-sm" onClick={onDelete}>
+            Delete
+          </Button>
+        </div>
       </div>
     </div>
   )
