@@ -39,8 +39,11 @@ export function HomePage() {
 
   return (
     <div className="flex flex-col gap-9 lg:h-full lg:gap-5">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <PageHeading title="Home" />
+      <div className="flex flex-wrap items-center justify-end gap-4 sm:justify-between">
+        {/* The top nav already says Home, so phones skip the title. */}
+        <div className="hidden sm:block">
+          <PageHeading title="Home" />
+        </div>
 
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
           {/* Hidden on phones for now, to keep the search box near the top. */}
