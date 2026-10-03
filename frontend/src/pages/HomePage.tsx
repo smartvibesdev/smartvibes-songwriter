@@ -71,6 +71,7 @@ export function HomePage() {
         page={page}
         sort={query.sort}
         hasFilters={notebook.hasFilters}
+        loading={notebook.loading}
         loadError={notebook.loadError}
         actionError={songs.actionError || fragments.actionError}
         onPage={notebook.goToPage}
