@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { type KeyboardEvent, useState } from 'react'
+import { type KeyboardEvent, type ReactNode, useState } from 'react'
 import type { Scope, SortOrder, TagCount, YearCount } from '../api'
 import { Button } from '../ui/Button'
 import { FieldLabel } from '../ui/FieldLabel'
@@ -24,6 +24,8 @@ type CatalogToolbarProps = {
   /** Only for the mixed list on Home: which kinds to show. */
   scope?: Scope
   onScope?: (scope: Scope) => void
+  /** A button shown beside the search box on phones (wider screens place it elsewhere). */
+  phoneAction?: ReactNode
 }
 
 /** The search box, tag filter, year selector and sort choice above a list. */
@@ -66,12 +68,18 @@ export function CatalogToolbar(props: CatalogToolbarProps) {
   return (
     // The search box has its own row; tags, year and sort share the row under it.
     <div className="flex flex-col gap-4 lg:gap-3">
-      <SearchBox
-        value={props.searchText}
-        onChange={props.onSearchText}
-        label={props.placeholder}
-        placeholder={props.placeholder}
-      />
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <SearchBox
+            value={props.searchText}
+            onChange={props.onSearchText}
+            label={props.placeholder}
+            placeholder={props.placeholder}
+          />
+        </div>
+
+        {props.phoneAction && <div className="shrink-0 sm:hidden">{props.phoneAction}</div>}
+      </div>
 
       <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3">
         <div className="flex flex-wrap items-center gap-x-8 gap-y-3">

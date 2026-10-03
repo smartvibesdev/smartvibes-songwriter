@@ -11,7 +11,7 @@ type SearchBoxProps = {
 /** The big search box at the top of every page, with a small × to clear it. */
 export function SearchBox({ value, onChange, label, placeholder }: SearchBoxProps) {
   return (
-    <div className="flex min-w-64 flex-1 items-center gap-3.5 rounded-[1.25rem] border border-border bg-card px-6 shadow-card focus-within:border-primary-text focus-within:ring-2 focus-within:ring-primary-text/30">
+    <div className="flex min-w-0 flex-1 items-center gap-3 rounded-[1.25rem] border border-border bg-card px-4 shadow-card sm:min-w-64 sm:gap-3.5 sm:px-6 focus-within:border-primary-text focus-within:ring-2 focus-within:ring-primary-text/30">
       <Search size={20} className="text-muted" aria-hidden="true" />
 
       <input
@@ -20,7 +20,7 @@ export function SearchBox({ value, onChange, label, placeholder }: SearchBoxProp
         value={value}
         onChange={(e) => onChange(e.target.value)}
         maxLength={100}
-        className="w-full bg-transparent py-5 text-lg text-foreground outline-none placeholder:text-muted lg:py-3"
+        className="w-full min-w-0 bg-transparent py-4 text-lg text-ellipsis sm:py-5 text-foreground outline-none placeholder:text-muted lg:py-3"
       />
 
       {value && (
