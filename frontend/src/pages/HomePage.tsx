@@ -37,9 +37,12 @@ export function HomePage() {
     notebook.showNewest()
   }
 
+  // On phones the New button sits beside the search box; on wider screens it is in the top row.
+  const newMenu = <NewMenu onNewFragment={() => setComposing('fragment')} onNewSong={() => setComposing('song')} />
+
   return (
     <div className="flex flex-col gap-9 lg:h-full lg:gap-5">
-      <div className="flex flex-wrap items-center justify-end gap-4 sm:justify-between">
+      <div className="hidden flex-wrap items-center justify-between gap-4 sm:flex">
         {/* The top nav already says Home, so phones skip the title. */}
         <div className="hidden sm:block">
           <PageHeading title="Home" />
@@ -51,12 +54,13 @@ export function HomePage() {
             <RandomFragmentInline />
           </div>
 
-          <NewMenu onNewFragment={() => setComposing('fragment')} onNewSong={() => setComposing('song')} />
+          {newMenu}
         </div>
       </div>
 
       <CatalogToolbar
         placeholder="Search your songs and fragments…"
+        phoneAction={newMenu}
         searchText={notebook.searchText}
         onSearchText={notebook.setSearchText}
         allTags={homeTags}
