@@ -473,16 +473,30 @@ def _year_of_key(prefix: str, sort_key: str) -> int:
     return datetime.fromtimestamp(millis / 1000, UTC).year
 
 
-def _key_range(user_id: str, prefix: str, year: int | None) -> Any:
-    """All of this user's items of one kind, or only those created in `year`."""
-    user = Key("PK").eq(_pk(user_id))
+def _key_range(user_id: str, prefix: str, year: int | None) -> dict[str, Any]:
+    """The query arguments for all of this user's items of one kind, or only those created in `year`.
+
+    The condition is written as a plain string, not built with `Key(...)`. boto3's builder keeps
+    placeholder counters on the client, so parallel queries sharing one client could be given
+    the same placeholder names and fail.
+    """
+    values: dict[str, Any] = {":pk": _pk(user_id)}
 
     if year is None:
-        return user & Key("SK").begins_with(prefix)
+        values[":prefix"] = prefix
 
-    return user & Key("SK").between(
-        _year_start_key(prefix, year), _year_start_key(prefix, year + 1)
-    )
+        return {
+            "KeyConditionExpression": "PK = :pk AND begins_with(SK, :prefix)",
+            "ExpressionAttributeValues": values,
+        }
+
+    values[":low"] = _year_start_key(prefix, year)
+    values[":high"] = _year_start_key(prefix, year + 1)
+
+    return {
+        "KeyConditionExpression": "PK = :pk AND SK BETWEEN :low AND :high",
+        "ExpressionAttributeValues": values,
+    }
 
 
 def _edge_keys(
@@ -491,7 +505,7 @@ def _edge_keys(
     """The sort keys of the newest (or oldest) `count` items, reading only the keys."""
     query: dict[str, Any] = {
         "TableName": os.environ["TABLE_NAME"],
-        "KeyConditionExpression": _key_range(user_id, prefix, year),
+        **_key_range(user_id, prefix, year),
         "ScanIndexForward": not newest,
         "ProjectionExpression": "SK",
     }
@@ -514,7 +528,7 @@ def _count_items(user_id: str, prefix: str, year: int) -> int:
     """How many of this user's items of one kind were created in `year`."""
     query: dict[str, Any] = {
         "TableName": os.environ["TABLE_NAME"],
-        "KeyConditionExpression": _key_range(user_id, prefix, year),
+        **_key_range(user_id, prefix, year),
         "Select": "COUNT",
     }
     total = 0

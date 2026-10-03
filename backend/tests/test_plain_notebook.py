@@ -115,3 +115,13 @@ def test_items_made_through_the_service_appear_newest_first():
     assert [entry.id for entry in page.items] == [last.id, song.id, first.id]
     assert [entry.kind for entry in page.items] == ["fragment", "song", "fragment"]
     assert (page.total, page.all_count) == (3, 3)
+
+
+def test_key_conditions_are_plain_strings_so_parallel_queries_cannot_collide():
+    # boto3's Key(...) builder keeps placeholder counters that threads sharing a client would
+    # race on, which once failed CI with "Query condition missed key schema element: PK".
+    for year in (None, 2024):
+        arguments = service._key_range(ALICE, "FRAG#", year)
+
+        assert isinstance(arguments["KeyConditionExpression"], str)
+        assert arguments["ExpressionAttributeValues"][":pk"] == f"USER#{ALICE}"
