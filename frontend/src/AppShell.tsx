@@ -22,7 +22,7 @@ export function AppShell({ onSignedOut }: AppShellProps) {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-[1040px] flex-col gap-14 px-6 py-8 sm:px-10 lg:h-dvh lg:gap-5 lg:py-5">
+    <div className="mx-auto flex min-h-screen max-w-[1040px] flex-col gap-6 px-6 py-8 sm:gap-14 sm:px-10 lg:h-dvh lg:gap-5 lg:py-5">
       <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-4 sm:gap-x-6">
         <div className="flex items-center gap-x-5 sm:gap-x-10">
           <Logo />
