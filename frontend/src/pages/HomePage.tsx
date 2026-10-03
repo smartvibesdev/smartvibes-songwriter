@@ -43,7 +43,10 @@ export function HomePage() {
         <PageHeading title="Home" />
 
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-          <RandomFragmentInline />
+          {/* Hidden on phones for now, to keep the search box near the top. */}
+          <div className="hidden sm:block">
+            <RandomFragmentInline />
+          </div>
 
           <NewMenu onNewFragment={() => setComposing('fragment')} onNewSong={() => setComposing('song')} />
         </div>
