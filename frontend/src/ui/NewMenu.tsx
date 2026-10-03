@@ -1,5 +1,5 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Plus } from 'lucide-react'
 import { Button } from './Button'
 
 const ITEM =
@@ -11,14 +11,16 @@ type NewMenuProps = {
   onNewSong: () => void
 }
 
-/** One blue "New" button that opens a small menu to add a fragment or a song. */
+/** One blue "New" button (a plus on phones) that opens a small menu to add a fragment or a song. */
 export function NewMenu({ onNewFragment, onNewSong }: NewMenuProps) {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
-        <Button>
-          New
-          <ChevronDown size={16} aria-hidden="true" />
+        {/* Phones show just a plus; the word stays for screen readers. */}
+        <Button className="max-sm:px-3">
+          <Plus size={22} aria-hidden="true" className="sm:hidden" />
+          <span className="sr-only sm:not-sr-only">New</span>
+          <ChevronDown size={16} aria-hidden="true" className="hidden sm:block" />
         </Button>
       </DropdownMenu.Trigger>
 
