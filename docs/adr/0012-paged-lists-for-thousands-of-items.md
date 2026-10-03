@@ -1,6 +1,7 @@
 # 0012. Paged lists and filters for thousands of items
 
-- Status: Accepted
+- Status: Accepted. Partly superseded by [0014](0014-plain-lists-read-only-the-page.md): plain
+  lists (no words, no tags) no longer read every item.
 - Date: 2026-10-02
 
 ## Context
