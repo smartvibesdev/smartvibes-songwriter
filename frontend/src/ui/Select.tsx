@@ -11,7 +11,7 @@ export function Select({ className, children, ...rest }: SelectHTMLAttributes<HT
     <div className="relative">
       <select
         className={cx(
-          'cursor-pointer appearance-none rounded-xl border border-border bg-card py-2.5 pr-10 pl-3 text-sm text-foreground',
+          'cursor-pointer appearance-none rounded-xl border border-border bg-card py-2.5 pr-9 pl-3 text-sm text-foreground',
           className,
         )}
         {...rest}

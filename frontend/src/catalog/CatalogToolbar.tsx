@@ -1,4 +1,4 @@
-import { Tag, X } from 'lucide-react'
+import { LayoutGrid, Plus, X } from 'lucide-react'
 import { type KeyboardEvent, type ReactNode, useState } from 'react'
 import type { Scope, SortOrder, TagCount, YearCount } from '../api'
 import { Button } from '../ui/Button'
@@ -27,6 +27,9 @@ type CatalogToolbarProps = {
   /** A button shown beside the search box on phones (wider screens place it elsewhere). */
   phoneAction?: ReactNode
 }
+
+// Year, Show and Sort are all this wide, so the row looks even.
+const SELECT_WIDTH = 'w-28'
 
 /** The search box, tag filter, year selector and sort choice above a list. */
 export function CatalogToolbar(props: CatalogToolbarProps) {
@@ -88,6 +91,7 @@ export function CatalogToolbar(props: CatalogToolbarProps) {
             <FieldLabel>Year</FieldLabel>
 
             <Select
+              className={SELECT_WIDTH}
               value={year === null ? '' : String(year)}
               onChange={(e) => onYear(e.target.value === '' ? null : Number(e.target.value))}
             >
@@ -100,10 +104,7 @@ export function CatalogToolbar(props: CatalogToolbarProps) {
             </Select>
           </label>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-2 sm:gap-3">
-            {/* Phones show a tag icon in place of the word, to leave room for the buttons. */}
-            <Tag size={16} role="img" aria-label="Tags" className="shrink-0 text-muted sm:hidden" />
-
-            <FieldLabel className="-mr-1 hidden sm:inline">Tags</FieldLabel>
+            <FieldLabel className="sm:-mr-1">Tags</FieldLabel>
 
             {selectedTags.map((tag) => (
               <button
@@ -142,9 +143,10 @@ export function CatalogToolbar(props: CatalogToolbarProps) {
                 type="button"
                 aria-label="Add a tag filter"
                 onClick={() => setAddingTag(true)}
-                className="cursor-pointer rounded-full border border-dashed border-muted/60 px-3.5 py-1.5 text-sm font-medium text-soft hover:border-muted"
+                className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-dashed border-muted/60 px-2.5 py-1.5 text-sm font-medium text-soft hover:border-muted sm:px-3.5"
               >
-                + Add
+                <Plus size={16} aria-hidden="true" />
+                <span className="hidden sm:inline">Add</span>
               </button>
             )}
 
@@ -156,7 +158,8 @@ export function CatalogToolbar(props: CatalogToolbarProps) {
                 title={`Browse all ${allTags.length} tags`}
                 onClick={() => setBrowsing(true)}
               >
-                Browse
+                <LayoutGrid size={20} aria-hidden="true" className="sm:hidden" />
+                <span className="hidden sm:inline">Browse</span>
               </Button>
             )}
           </div>
@@ -167,7 +170,11 @@ export function CatalogToolbar(props: CatalogToolbarProps) {
             <label className="flex items-center gap-2.5">
               <FieldLabel>Show</FieldLabel>
 
-              <Select value={props.scope} onChange={(e) => props.onScope?.(e.target.value as Scope)}>
+              <Select
+                className={SELECT_WIDTH}
+                value={props.scope}
+                onChange={(e) => props.onScope?.(e.target.value as Scope)}
+              >
                 <option value="both">All</option>
                 <option value="fragments">Fragments</option>
                 <option value="songs">Songs</option>
@@ -178,7 +185,11 @@ export function CatalogToolbar(props: CatalogToolbarProps) {
           <label className="flex items-center gap-2.5">
             <FieldLabel>Sort</FieldLabel>
 
-            <Select value={props.sort} onChange={(e) => props.onSort(e.target.value as SortOrder)}>
+            <Select
+              className={SELECT_WIDTH}
+              value={props.sort}
+              onChange={(e) => props.onSort(e.target.value as SortOrder)}
+            >
               <option value="newest">Newest</option>
               <option value="oldest">Oldest</option>
             </Select>
