@@ -1,4 +1,4 @@
-import { X } from 'lucide-react'
+import { Tag, X } from 'lucide-react'
 import { type KeyboardEvent, type ReactNode, useState } from 'react'
 import type { Scope, SortOrder, TagCount, YearCount } from '../api'
 import { Button } from '../ui/Button'
@@ -81,8 +81,9 @@ export function CatalogToolbar(props: CatalogToolbarProps) {
         {props.phoneAction && <div className="shrink-0 sm:hidden">{props.phoneAction}</div>}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3">
-        <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+      {/* Phones: a 2x2 grid (year, tags / show, sort). Wider screens: one wrapping row. */}
+      <div className="grid grid-cols-2 items-center gap-x-4 gap-y-3 sm:flex sm:flex-wrap sm:justify-between sm:gap-x-8">
+        <div className="contents sm:flex sm:flex-wrap sm:items-center sm:gap-x-8 sm:gap-y-3">
           <label className="flex items-center gap-2.5">
             <FieldLabel>Year</FieldLabel>
 
@@ -98,8 +99,11 @@ export function CatalogToolbar(props: CatalogToolbarProps) {
               ))}
             </Select>
           </label>
-          <div className="flex flex-wrap items-center gap-3">
-            <FieldLabel className="-mr-1">Tags</FieldLabel>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 sm:gap-3">
+            {/* Phones show a tag icon in place of the word, to leave room for the buttons. */}
+            <Tag size={16} role="img" aria-label="Tags" className="shrink-0 text-muted sm:hidden" />
+
+            <FieldLabel className="-mr-1 hidden sm:inline">Tags</FieldLabel>
 
             {selectedTags.map((tag) => (
               <button
@@ -136,22 +140,29 @@ export function CatalogToolbar(props: CatalogToolbarProps) {
             ) : (
               <button
                 type="button"
+                aria-label="Add a tag filter"
                 onClick={() => setAddingTag(true)}
                 className="cursor-pointer rounded-full border border-dashed border-muted/60 px-3.5 py-1.5 text-sm font-medium text-soft hover:border-muted"
               >
-                + Add tag
+                + Add
               </button>
             )}
 
             {allTags.length > 0 && (
-              <Button variant="link" className="text-sm" onClick={() => setBrowsing(true)}>
-                Browse all {allTags.length} tags
+              <Button
+                variant="link"
+                className="text-sm"
+                aria-label={`Browse all ${allTags.length} tags`}
+                title={`Browse all ${allTags.length} tags`}
+                onClick={() => setBrowsing(true)}
+              >
+                Browse
               </Button>
             )}
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        <div className="contents sm:flex sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-3">
           {props.scope && props.onScope && (
             <label className="flex items-center gap-2.5">
               <FieldLabel>Show</FieldLabel>
@@ -168,8 +179,8 @@ export function CatalogToolbar(props: CatalogToolbarProps) {
             <FieldLabel>Sort</FieldLabel>
 
             <Select value={props.sort} onChange={(e) => props.onSort(e.target.value as SortOrder)}>
-              <option value="newest">Newest first</option>
-              <option value="oldest">Oldest first</option>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
             </Select>
           </label>
         </div>
