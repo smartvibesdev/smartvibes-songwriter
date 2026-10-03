@@ -4,7 +4,8 @@ Instructions for Claude Code when working in this repository.
 
 ## Working agreement
 
-- **Never commit, push, merge, open a PR, or deploy unless the user explicitly asks in that message.** Make edits, leave them uncommitted so they can be reviewed and tested in VS Code's Source Control panel, and say which files changed. One approval covers only that one action.
+- **Commit finished work on a branch, and nothing more.** Start each task on a short, descriptive branch created from `main`. Run `git branch --show-current` before every commit and stop if it says `main`. When the task passes its checks, commit it; never commit unfinished or failing work, and never commit to `main`. Then report the commit hash and the exact push command.
+- **Never push, merge, open a PR, or deploy unless the user explicitly asks in that message.** One approval covers only that one action.
 - **This includes `cdk deploy` and any other command that creates, changes, or deletes AWS resources.** Read-only checks (for example `cdk diff`, `cdk synth`, `aws sts get-caller-identity`) are fine.
 - **Ask before making AWS assumptions** (region, account, naming, permissions).
 - **Define acronyms the first time they appear** in a reply (for example, "ADR (Architecture Decision Record)"). The user is an experienced developer who is new to Python tooling and AWS, so explain what commands do and why, and give exact commands.
