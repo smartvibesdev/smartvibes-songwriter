@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { signOut } from './auth'
 import { HomePage } from './pages/HomePage'
+import { AccountMenu } from './ui/AccountMenu'
 import { Button } from './ui/Button'
 import { Logo } from './ui/Logo'
 import { ThemeToggle } from './ui/ThemeToggle'
@@ -22,8 +23,8 @@ export function AppShell({ onSignedOut }: AppShellProps) {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-[1040px] flex-col gap-14 px-6 py-8 sm:px-10 lg:h-dvh lg:gap-5 lg:py-5">
-      <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
-        <div className="flex flex-wrap items-center gap-x-10 gap-y-3">
+      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-4 sm:gap-x-6">
+        <div className="flex items-center gap-x-5 sm:gap-x-10">
           <Logo />
 
           <nav aria-label="Pages" className="flex gap-9">
@@ -36,12 +37,19 @@ export function AppShell({ onSignedOut }: AppShellProps) {
           </nav>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1 sm:gap-3">
           <ThemeToggle />
 
-          <Button variant="quiet" onClick={handleSignOut} disabled={signingOut}>
-            Sign out
-          </Button>
+          {/* Wide screens show Sign out; narrow ones put it in the menu button. */}
+          <div className="hidden sm:block">
+            <Button variant="quiet" onClick={handleSignOut} disabled={signingOut}>
+              Sign out
+            </Button>
+          </div>
+
+          <div className="sm:hidden">
+            <AccountMenu onSignOut={handleSignOut} signingOut={signingOut} />
+          </div>
         </div>
       </header>
 
