@@ -5,6 +5,7 @@ share it. Every function takes `user_id` first, and every key is built from it, 
 one user's calls can only ever reach that user's partition (`USER#<user_id>`).
 """
 
+import functools
 import math
 import os
 import random
@@ -12,11 +13,13 @@ import secrets
 import time
 from collections import Counter
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import Any
 
 import boto3
 from boto3.dynamodb.conditions import Key
+from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from app.models import (
@@ -344,8 +347,27 @@ def query_notebook(
 ) -> Page[NotebookEntry]:
     """One page of songs and fragments together, filtered and sorted like the separate lists.
 
-    `scope` limits it to songs or fragments. Each entry says which it is in `kind`.
+    `scope` limits it to songs or fragments. Each entry says which it is in `kind`. With no
+    words and no tags, only the items on the page are read (see `_plain_notebook`); otherwise
+    every item has to be read to look inside it.
     """
+    if not q.split() and not _normalize_tags(tags):
+        return _plain_notebook(user_id, year, sort, page, page_size, scope)
+
+    return _filtered_notebook(user_id, q, tags, year, sort, page, page_size, scope)
+
+
+def _filtered_notebook(
+    user_id: str,
+    q: str,
+    tags: list[str] | None,
+    year: int | None,
+    sort: Sort,
+    page: int,
+    page_size: int,
+    scope: Scope,
+) -> Page[NotebookEntry]:
+    """The mixed list with words or tags: loads every item, then filters, sorts and pages."""
     entries: list[tuple[str, dict[str, Any]]] = []
 
     if scope in ("both", "songs"):
@@ -398,6 +420,240 @@ def query_notebook(
         items=[build(kind, item) for kind, item in matching[first : first + page_size]],
         total=len(matching),
         all_count=len(entries),
+        page=page,
+        page_size=page_size,
+        pages=pages,
+        years=years,
+    )
+
+
+# --- The mixed list without words or tags ---
+#
+# An item's ID starts with the time it was created (see `_new_id`), so DynamoDB keeps a
+# user's songs and fragments in date order and can find the newest ones, or all of one year's,
+# by key alone. That means this list can be built without reading every item:
+#   - the newest (or oldest) keys, enough for the page asked for;
+#   - how many items there are in each year, counted by DynamoDB without sending them back
+#     (the total, the "all" count and the year buttons all come from these counts);
+#   - the full records of just the items on the page.
+
+KINDS = {"song": SONG_PREFIX, "fragment": FRAGMENT_PREFIX}
+
+
+@functools.cache
+def _shared_client() -> Any:
+    """One DynamoDB connection, kept for as long as this process lives and used by all the
+    parallel calls below. Opening a new connection for every call costs more than the call.
+    (Clients, unlike the resources made by `_table`, are safe to share between threads.)
+    """
+    return boto3.resource(
+        "dynamodb", config=Config(max_pool_connections=40)
+    ).meta.client
+
+
+def _in_parallel(calls: list[Callable[[], Any]]) -> list[Any]:
+    """Run the calls at the same time and return their results in order."""
+    with ThreadPoolExecutor(max_workers=max(len(calls), 1)) as pool:
+        futures = [pool.submit(call) for call in calls]
+
+        return [future.result() for future in futures]
+
+
+def _year_start_key(prefix: str, year: int) -> str:
+    """The sort key that comes just before every item created in `year` or later."""
+    millis = int(datetime(year, 1, 1, tzinfo=UTC).timestamp() * 1000)
+
+    return f"{prefix}{millis:012x}"
+
+
+def _year_of_key(prefix: str, sort_key: str) -> int:
+    """The year in an item's sort key, which holds the time it was created."""
+    millis = int(sort_key.removeprefix(prefix)[:12], 16)
+
+    return datetime.fromtimestamp(millis / 1000, UTC).year
+
+
+def _key_range(user_id: str, prefix: str, year: int | None) -> Any:
+    """All of this user's items of one kind, or only those created in `year`."""
+    user = Key("PK").eq(_pk(user_id))
+
+    if year is None:
+        return user & Key("SK").begins_with(prefix)
+
+    return user & Key("SK").between(
+        _year_start_key(prefix, year), _year_start_key(prefix, year + 1)
+    )
+
+
+def _edge_keys(
+    user_id: str, prefix: str, year: int | None, newest: bool, count: int
+) -> list[str]:
+    """The sort keys of the newest (or oldest) `count` items, reading only the keys."""
+    query: dict[str, Any] = {
+        "TableName": os.environ["TABLE_NAME"],
+        "KeyConditionExpression": _key_range(user_id, prefix, year),
+        "ScanIndexForward": not newest,
+        "ProjectionExpression": "SK",
+    }
+    keys: list[str] = []
+
+    while len(keys) < count:
+        query["Limit"] = count - len(keys)
+        response = _shared_client().query(**query)
+        keys += [item["SK"] for item in response["Items"]]
+
+        if "LastEvaluatedKey" not in response:
+            break
+
+        query["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+
+    return keys
+
+
+def _count_items(user_id: str, prefix: str, year: int) -> int:
+    """How many of this user's items of one kind were created in `year`."""
+    query: dict[str, Any] = {
+        "TableName": os.environ["TABLE_NAME"],
+        "KeyConditionExpression": _key_range(user_id, prefix, year),
+        "Select": "COUNT",
+    }
+    total = 0
+
+    while True:
+        response = _shared_client().query(**query)
+        total += response["Count"]
+
+        if "LastEvaluatedKey" not in response:
+            return total
+
+        query["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+
+
+def _get_records(user_id: str, sort_keys: list[str]) -> dict[str, dict[str, Any]]:
+    """The full records for these sort keys, by sort key."""
+    table_name = os.environ["TABLE_NAME"]
+    records: dict[str, dict[str, Any]] = {}
+
+    for start in range(0, len(sort_keys), 100):
+        keys = [
+            {"PK": _pk(user_id), "SK": sort_key}
+            for sort_key in sort_keys[start : start + 100]
+        ]
+
+        while keys:
+            response = _shared_client().batch_get_item(
+                RequestItems={table_name: {"Keys": keys}}
+            )
+
+            for item in response["Responses"].get(table_name, []):
+                records[item["SK"]] = item
+
+            keys = response["UnprocessedKeys"].get(table_name, {}).get("Keys", [])
+
+    return records
+
+
+def _plain_notebook(
+    user_id: str,
+    year: int | None,
+    sort: Sort,
+    page: int,
+    page_size: int,
+    scope: Scope,
+) -> Page[NotebookEntry]:
+    """One page of songs and fragments together, with no words or tags to look for.
+
+    Gives the same answer as `_filtered_notebook` (apart from the order of two items made
+    in the very same millisecond), but reads only the page's items.
+    """
+    kinds = {
+        kind: prefix
+        for kind, prefix in KINDS.items()
+        if scope == "both" or scope == f"{kind}s"
+    }
+    newest = sort == "newest"
+    wanted = max(page, 1) * page_size
+
+    # Step 1: the keys that could be on this page, and the oldest key (to know the first year).
+    kind_list = list(kinds.items())
+    key_calls = [
+        lambda prefix=prefix: _edge_keys(user_id, prefix, year, newest, wanted)
+        for _, prefix in kind_list
+    ]
+    oldest_calls = [
+        lambda prefix=prefix: _edge_keys(user_id, prefix, None, False, 1)
+        for _, prefix in kind_list
+    ]
+    results = _in_parallel(key_calls + oldest_calls)
+    page_keys = results[: len(kind_list)]
+    oldest = [keys[0] for keys in results[len(kind_list) :] if keys]
+
+    if len(oldest) == 0:
+        return Page(
+            items=[],
+            total=0,
+            all_count=0,
+            page=1,
+            page_size=page_size,
+            pages=1,
+            years=[],
+        )
+
+    first_year = min(
+        _year_of_key(prefix, key)
+        for (_, prefix), keys in zip(kind_list, results[len(kind_list) :], strict=True)
+        for key in keys
+    )
+    all_years = list(range(first_year, datetime.now(UTC).year + 1))
+
+    # Step 2: how many items there are in each year (this gives every count on the page).
+    count_calls = [
+        lambda prefix=prefix, y=y: _count_items(user_id, prefix, y)
+        for _, prefix in kind_list
+        for y in all_years
+    ]
+    counts = _in_parallel(count_calls)
+    year_counts = {
+        y: sum(counts[i * len(all_years) + j] for i in range(len(kind_list)))
+        for j, y in enumerate(all_years)
+    }
+    all_count = sum(year_counts.values())
+    total = all_count if year is None else year_counts.get(year, 0)
+    pages = max(1, math.ceil(total / page_size))
+
+    if page > pages:
+        return _plain_notebook(user_id, year, sort, pages, page_size, scope)
+
+    page = max(page, 1)
+    first = (page - 1) * page_size
+
+    # Merge the kinds by ID (which starts with the creation time) and cut out this page.
+    entries = [
+        (kind, prefix, key)
+        for (kind, prefix), keys in zip(kind_list, page_keys, strict=True)
+        for key in keys
+    ]
+    entries.sort(key=lambda entry: entry[2].removeprefix(entry[1]), reverse=newest)
+    window = entries[first : first + page_size]
+
+    # Step 3: the full records of just the items on the page.
+    records = _get_records(user_id, [key for _, _, key in window])
+    items: list[SongEntry | FragmentEntry] = []
+
+    for kind, prefix, key in window:
+        item = {**records[key], "id": key.removeprefix(prefix)}
+        items.append(SongEntry(**item) if kind == "song" else FragmentEntry(**item))
+
+    years = [
+        YearCount(year=y, count=year_counts[y])
+        for y in sorted(year_counts, reverse=True)
+        if year_counts[y] > 0
+    ]
+
+    return Page(
+        items=items,
+        total=total,
+        all_count=all_count,
         page=page,
         page_size=page_size,
         pages=pages,

@@ -140,6 +140,32 @@ token, so there is nothing to type.
 Clicking Sign out in this mode may take you to the real Cognito sign-out page
 (harmless). Open the `__preview-login` link again to get back in.
 
+### Seed dev with sample data
+
+To see how the app behaves with thousands of items on the **real** `dev` database (before
+importing real notes), `backend/seed_dev_data.py` writes generated songs and fragments for one
+user. Every generated item is tagged `sample` (and carries a hidden marker), so it can be removed again without touching
+anything written by hand. It can only talk to the `dev` account and its table, and it refuses a
+user ID that does not look like a Cognito ID.
+
+```bash
+cd backend && source .venv/bin/activate
+aws sso login --profile smartvibes-dev
+
+# 1. See the plan. Nothing is written.
+python seed_dev_data.py --user-id <cognito-sub>
+
+# 2. Do it (5,000 fragments and 300 songs by default; change with --fragments and --songs).
+python seed_dev_data.py --user-id <cognito-sub> --yes
+
+# 3. Remove only the generated items, later.
+python seed_dev_data.py --user-id <cognito-sub> --delete --yes
+```
+
+A user's Cognito ID (`sub`) is the `user_id` that `GET /me` returns, and is also listed in the
+Cognito console. Generating about 5,300 items is about 5,300 DynamoDB writes, well under one cent.
+The same tool, `backend/sample_data.py`, builds the `--big` data for the local preview.
+
 ### Run the checks (same ones CI runs on GitHub)
 
 ```bash
