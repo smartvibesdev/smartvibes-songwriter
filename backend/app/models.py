@@ -193,3 +193,31 @@ class GenerateOut(BaseModel):
     temperature: float
     tokens: TokenCount
     budget: BudgetOut
+
+
+# --- Word tools (rhymes, synonyms, antonyms; no AI) ---
+
+MAX_WORD_LENGTH = 40
+
+
+class RhymeWord(BaseModel):
+    word: str
+    syllables: int
+
+
+class PartOfSpeechWords(BaseModel):
+    part: str
+    words: list[str]
+
+
+class WordInfo(BaseModel):
+    """Everything the dictionaries know about one word."""
+
+    word: str
+    # False when the pronouncing dictionary has no sounds for the word, so no rhymes can be found.
+    rhymes_known: bool
+    syllables: list[int]
+    rhymes: list[RhymeWord]
+    near_rhymes: list[RhymeWord]
+    synonyms: list[PartOfSpeechWords]
+    antonyms: list[PartOfSpeechWords]

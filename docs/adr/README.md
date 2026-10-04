@@ -24,3 +24,4 @@ Format: [0000-template.md](0000-template.md)
 | [0013](0013-app-level-state-for-the-screens.md) | App-level state for the screens | Accepted |
 | [0014](0014-plain-lists-read-only-the-page.md) | Plain lists read only the page, not every item | Accepted |
 | [0015](0015-ai-generation-provider-model-and-wildness-dial.md) | AI generation: provider, model and the wildness dial | Accepted |
+| [0016](0016-word-tools-without-ai.md) | Word tools without AI: rhymes, near rhymes, synonyms and antonyms | Accepted |

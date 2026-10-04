@@ -1,6 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { GeneratePanel } from '../ai/GeneratePanel'
+import { WordsPanel } from '../ai/WordsPanel'
 import { LIMITS, type SongInput, getSong } from '../api'
 import { describeError } from '../errors'
 import { formatCount } from '../format'
@@ -186,7 +187,9 @@ function SongEditor({ initial, songId }: SongEditorProps) {
           </div>
         </div>
 
-        <div className="lg:min-h-0 lg:overflow-y-auto">
+        <div className="flex flex-col gap-4 lg:min-h-0 lg:overflow-y-auto">
+          <WordsPanel getSelection={() => editorRef.current?.selectedText() ?? ''} />
+
           <GeneratePanel
             onUseTitle={(text) => setTitle(text.slice(0, LIMITS.title))}
             onAddToLyrics={(text) => editorRef.current?.append(text)}

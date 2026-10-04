@@ -7,6 +7,8 @@ import { type Ref, useEffect, useImperativeHandle, useRef } from 'react'
 export type TextEditorHandle = {
   /** Add text at the end (after a blank line if there is already text) and move the cursor after it. */
   append: (text: string) => void
+  /** The text the user has selected, or the empty string. */
+  selectedText: () => string
 }
 
 type TextEditorProps = {
@@ -48,6 +50,18 @@ export function TextEditor({ ref, initialValue, onChange, label, placeholderText
   }, [onChange])
 
   useImperativeHandle(ref, () => ({
+    selectedText() {
+      const editor = view.current
+
+      if (editor === null) {
+        return ''
+      }
+
+      const { from, to } = editor.state.selection.main
+
+      return editor.state.sliceDoc(from, to)
+    },
+
     append(text: string) {
       const editor = view.current
 
