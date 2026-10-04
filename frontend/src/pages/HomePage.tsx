@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import type { FragmentInput, SongInput } from '../api'
+import { useNavigate } from 'react-router'
+import type { FragmentInput } from '../api'
 import { CatalogList } from '../catalog/CatalogList'
 import { CatalogToolbar } from '../catalog/CatalogToolbar'
 import { FragmentForm } from '../forms/FragmentForm'
-import { SongForm } from '../forms/SongForm'
 import { FragmentRow } from '../rows/FragmentRow'
 import { SongRow } from '../rows/SongRow'
 import { useAppState } from '../state/AppStateContext'
@@ -15,16 +15,16 @@ import { RandomFragmentInline } from './RandomFragmentInline'
 
 /**
  * Search songs and fragments together, in the same layout as the Songs and Fragments pages. Which kinds
- * to show is chosen with SHOW. A small random fragment sits beside the title, and the New menu adds
- * a fragment or a song.
+ * to show is chosen with SHOW. A small random fragment sits beside the title. The New menu adds a
+ * fragment in a box over the page, or opens the song page to write a song.
  */
 const EMPTY_FRAGMENT: FragmentInput = { text: '', tags: [] }
-const EMPTY_SONG: SongInput = { title: '', body: '', tags: [] }
 
 export function HomePage() {
   const { notebook, songs, fragments, homeTags } = useAppState()
   const { page, query } = notebook
-  const [composing, setComposing] = useState<'song' | 'fragment' | null>(null)
+  const navigate = useNavigate()
+  const [addingFragment, setAddingFragment] = useState(false)
 
   /** Add a fragment, and go to the first page, newest first, where it appears. */
   async function addFragment(input: FragmentInput) {
@@ -32,13 +32,8 @@ export function HomePage() {
     notebook.showNewest()
   }
 
-  async function addSong(input: SongInput) {
-    await songs.create(input)
-    notebook.showNewest()
-  }
-
   // On phones the New button sits beside the search box; on wider screens it is in the top row.
-  const newMenu = <NewMenu onNewFragment={() => setComposing('fragment')} onNewSong={() => setComposing('song')} />
+  const newMenu = <NewMenu onNewFragment={() => setAddingFragment(true)} onNewSong={() => navigate('/songs/new')} />
 
   return (
     <div className="flex flex-col gap-4 sm:gap-9 lg:h-full lg:gap-5">
@@ -92,10 +87,7 @@ export function HomePage() {
               <SongRow
                 song={entry}
                 showKind={true}
-                editing={songs.editingId === entry.id}
-                onEdit={() => songs.setEditingId(entry.id)}
-                onCancelEdit={() => songs.setEditingId(null)}
-                onSave={(input) => songs.update(entry.id, input)}
+                onEdit={() => navigate(`/songs/${entry.id}`)}
                 onDelete={() => songs.setDeletingId(entry.id)}
               />
             )
@@ -115,24 +107,13 @@ export function HomePage() {
         }}
       />
 
-      <FormDialog open={composing === 'fragment'} title="New fragment" onClose={() => setComposing(null)}>
+      <FormDialog open={addingFragment} title="New fragment" onClose={() => setAddingFragment(false)}>
         <FragmentForm
           initial={EMPTY_FRAGMENT}
           submitLabel="Add fragment"
           clearOnSuccess={true}
           onSubmit={addFragment}
-          onCancel={() => setComposing(null)}
-          cancelLabel="Done"
-        />
-      </FormDialog>
-
-      <FormDialog open={composing === 'song'} title="New song" onClose={() => setComposing(null)}>
-        <SongForm
-          initial={EMPTY_SONG}
-          submitLabel="Add song"
-          clearOnSuccess={true}
-          onSubmit={addSong}
-          onCancel={() => setComposing(null)}
+          onCancel={() => setAddingFragment(false)}
           cancelLabel="Done"
         />
       </FormDialog>
