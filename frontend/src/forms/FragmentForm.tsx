@@ -1,9 +1,9 @@
 import { type FormEvent, useState } from 'react'
 import { type FragmentInput, LIMITS } from '../api'
 import { describeError } from '../errors'
-import { formatTags, parseTags } from '../tags'
 import { Button } from '../ui/Button'
 import { ErrorText } from '../ui/ErrorText'
+import { TagInput } from '../ui/TagInput'
 
 type FragmentFormProps = {
   initial: FragmentInput
@@ -25,7 +25,7 @@ export function FragmentForm({
   cancelLabel = 'Cancel',
 }: FragmentFormProps) {
   const [text, setText] = useState(initial.text)
-  const [tagsText, setTagsText] = useState(formatTags(initial.tags))
+  const [tags, setTags] = useState(initial.tags)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -35,11 +35,11 @@ export function FragmentForm({
     setSaving(true)
 
     try {
-      await onSubmit({ text, tags: parseTags(tagsText) })
+      await onSubmit({ text, tags })
 
       if (clearOnSuccess) {
         setText('')
-        setTagsText('')
+        setTags([])
       }
     } catch (err) {
       setError(describeError(err))
@@ -62,13 +62,7 @@ export function FragmentForm({
       />
 
       <div className="flex flex-wrap items-center gap-4 border-t border-border pt-5">
-        <input
-          aria-label="Tags"
-          placeholder="Tags, separated by commas"
-          value={tagsText}
-          onChange={(e) => setTagsText(e.target.value)}
-          className="min-w-48 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted"
-        />
+        <TagInput tags={tags} onChange={setTags} className="min-w-48 flex-1" />
 
         {onCancel && (
           <Button variant="quiet" onClick={onCancel}>
