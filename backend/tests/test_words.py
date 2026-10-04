@@ -100,3 +100,16 @@ def test_route_needs_sign_in():
     app.dependency_overrides.clear()
 
     assert client.get("/words/stone").status_code == 401
+
+
+def test_extra_words_get_rhymes_and_are_offered_as_rhymes():
+    known, _, _ = rhymes.find_rhymes("boujee")
+    _, rhymes_of_uh, _ = rhymes.find_rhymes("uh")
+
+    assert known is True
+    assert "bruh" in names(rhymes_of_uh)
+    assert rhymes.syllables_of("delulu") == [3]
+
+
+def test_extra_words_do_not_replace_cmudict_words():
+    assert rhymes.syllables_of("cap") == [1]

@@ -47,6 +47,9 @@ Data sources, all bundled with the Lambda and read from local files:
 - **Synonyms:** words of the same WordNet meaning, then (adjectives only) words of similar
   meanings, grouped by part of speech. **Antonyms:** WordNet's direct opposites, with adjective
   "similar to" groups borrowing the opposites of their head word.
+- **Modern words:** CMUdict lacks much slang (finna, boujee, rizz), so `backend/app/words/extra_pronunciations.txt`
+  adds about 100 entries in CMUdict's own format. They only fill gaps (CMUdict wins for a word it
+  has) and are offered as rhymes like any ordinary word. Add lines to the file to teach it more.
 - The route needs sign-in like every other route, takes one word of at most 40 characters, and
   never touches DynamoDB or Anthropic, so it does not use the token checkpoint.
 - The data is read on first use and cached per Lambda instance.

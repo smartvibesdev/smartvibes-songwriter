@@ -12,6 +12,7 @@ from functools import lru_cache
 
 import cmudict
 
+from app.words.extras import extra_pronunciations
 from app.words.lexicon import commonness, is_known_word
 
 MAX_RESULTS = 80
@@ -72,10 +73,16 @@ def shape_key(part: Phonemes) -> tuple:
 
 @lru_cache(maxsize=1)
 def _pronunciations() -> dict[str, list[Phonemes]]:
-    return {
+    words = {
         word: [tuple(phonemes) for phonemes in options]
         for word, options in cmudict.dict().items()
     }
+
+    # Our own extras only fill gaps; a word CMUdict already has keeps CMUdict's sounds.
+    for word, options in extra_pronunciations().items():
+        words.setdefault(word, options)
+
+    return words
 
 
 @lru_cache(maxsize=1)

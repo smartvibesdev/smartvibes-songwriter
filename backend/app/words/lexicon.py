@@ -5,6 +5,8 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
+from app.words.extras import extra_pronunciations
+
 DATA_FILE = Path(__file__).parent / "wordnet.json.gz"
 
 PART_NAMES = {"n": "noun", "v": "verb", "a": "adjective", "r": "adverb"}
@@ -56,12 +58,16 @@ def commonness(word: str) -> int:
     """How often the word (or its base form) appears in WordNet's sample text. 0 for rare words."""
     common = _data()["common"]
 
+    # Our extra words are modern and popular, so they count as a little common.
+    if word in extra_pronunciations():
+        return 1
+
     return max((common.get(form, 0) for form in base_forms(word)), default=0)
 
 
 def is_known_word(word: str) -> bool:
     """True for ordinary words, which keeps names and oddities out of rhyme lists."""
-    return known_form(word) is not None
+    return known_form(word) is not None or word in extra_pronunciations()
 
 
 def related_words(word: str) -> tuple[list[dict], list[dict]]:
