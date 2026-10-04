@@ -27,7 +27,9 @@ are small, and they have the same security and scaling needs as the rest of the 
 Data sources, all bundled with the Lambda and read from local files:
 
 - **CMU Pronouncing Dictionary** (PyPI package `cmudict`, about 134,000 words, public domain) for
-  rhymes, near rhymes and syllable counts.
+  rhymes, near rhymes and syllable counts. `backend/build_rhyme_data.py` turns it (plus the extras
+  below) into ready-made `backend/app/words/rhymes.json.gz` (about 2 MB, committed), so the Lambda
+  does not parse CMUdict or sort words at run time. `cmudict` is a development dependency only.
 - **Princeton WordNet 3.0** for synonyms, antonyms and a measure of how common a word is. WordNet
   is large (about 30 MB), so `backend/build_word_data.py` boils it down once into
   `backend/app/words/wordnet.json.gz` (about 1 MB, committed, with WordNet's license beside it).
@@ -50,16 +52,19 @@ Data sources, all bundled with the Lambda and read from local files:
   commoner words first, up to 20. Adjective "similar to" groups borrow the opposites of their head word.
 - **Modern words:** CMUdict lacks much slang (finna, boujee, rizz), so `backend/app/words/extra_pronunciations.txt`
   adds about 100 entries in CMUdict's own format. They only fill gaps (CMUdict wins for a word it
-  has) and are offered as rhymes like any ordinary word. Add lines to the file to teach it more.
+  has) and are offered as rhymes like any ordinary word. Add lines to the file, then run `python build_rhyme_data.py` and commit the new
+  data file (a test fails if you forget).
 - The route needs sign-in like every other route, takes one word of at most 40 characters, and
   never touches DynamoDB or Anthropic, so it does not use the token checkpoint.
-- The data is read on first use and cached per Lambda instance.
+- The data is read on first use and cached per Lambda instance. (Building the rhyme index at
+  run time first took 8.7 seconds on the 512 MB Lambda; reading ready-made data takes a fraction
+  of a second.)
 
 ## Consequences
 
 - No cost per lookup and no daily limit. The Lambda package grows by about 5 MB.
-- The first lookup in a new Lambda instance takes about 0.7 seconds to load and index the
-  dictionaries; later ones take milliseconds.
+- The first lookup in a new Lambda instance reads about 3.5 MB of data files; later ones take
+  milliseconds.
 - WordNet is thin on everyday nouns (it lists "rock" and "gem" for "stone", not "pebble"), and it
   has no slang or modern words. The synonym lists are a starting point, and a later AI "other words
   for this" tool can cover what WordNet misses.
