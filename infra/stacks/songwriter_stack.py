@@ -230,7 +230,7 @@ class SongwriterStack(cdk.Stack):
                     local=LocalPipBundling(),
                 ),
             ),
-            memory_size=512,
+            memory_size=1024,
             timeout=cdk.Duration.seconds(30),
             environment={
                 "TABLE_NAME": table.table_name,
