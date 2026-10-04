@@ -221,3 +221,26 @@ secret, or any access keys. Those go in AWS Secrets Manager.
 
 `cdk destroy` removes the stack but keeps the table and user pool (`RETAIN`);
 delete those by hand if you want a full cleanup.
+
+## AI generation: the Anthropic API key
+
+AI generation (ADR 0015) calls the Claude API from the Lambda. The key is never in the code or
+in CloudFormation. Do this once per account **before the first deploy that includes AI
+generation**; until the secret exists, the AI route answers "AI is not set up yet" and everything
+else works.
+
+1. In the Anthropic console, create an API key and set a **monthly spend limit** (the hard
+   ceiling at the provider; see the layers of protection in the plan, section 6).
+2. Store it in that AWS account (type or paste it at the hidden prompt):
+   ```bash
+   read -rs ANTHROPIC_KEY
+   aws secretsmanager create-secret --name smartvibes-songwriter/anthropic-api-key \
+     --secret-string "$ANTHROPIC_KEY" --profile smartvibes-dev   # and smartvibes-prod
+   unset ANTHROPIC_KEY
+   ```
+3. The stack gives the Lambda permission to read that one secret. Its limits are set in the
+   stack: 50,000 tokens per user per day (`AI_DAILY_TOKEN_BUDGET`) and 500,000 tokens for
+   everyone per day (`AI_GLOBAL_DAILY_TOKEN_CAP`). Haiku 4.5 costs $1 per million input tokens
+   and $5 per million output tokens, so the global cap is at most about $2.50 a day.
+4. Locally, `python dev_server.py` uses a demo generator with canned text, so no key is needed.
+   To try the real model from a local API, set `ANTHROPIC_API_KEY` in your shell instead.

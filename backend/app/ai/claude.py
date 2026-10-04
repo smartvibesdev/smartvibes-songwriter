@@ -73,12 +73,12 @@ class ClaudeGenerator:
 
 def _read_api_key() -> str:
     """The key from Secrets Manager (deployed), or ANTHROPIC_API_KEY (local development)."""
-    secret_arn = os.environ.get("ANTHROPIC_SECRET_ARN")
+    secret_id = os.environ.get("ANTHROPIC_SECRET_ID")
 
-    if secret_arn:
+    if secret_id:
         client = boto3.client("secretsmanager")
 
-        return client.get_secret_value(SecretId=secret_arn)["SecretString"].strip()
+        return client.get_secret_value(SecretId=secret_id)["SecretString"].strip()
 
     key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
 

@@ -333,7 +333,7 @@ def test_a_failed_call_costs_nothing_and_frees_the_reservation():
 
 
 def test_without_an_api_key_the_route_says_ai_is_not_set_up(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_SECRET_ARN", raising=False)
+    monkeypatch.delenv("ANTHROPIC_SECRET_ID", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     _shared_generator.cache_clear()
     sign_in_as(ALICE)

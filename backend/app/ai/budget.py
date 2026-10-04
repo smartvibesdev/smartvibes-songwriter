@@ -1,6 +1,6 @@
 """The token checkpoint: every AI call reserves tokens first and reconciles afterwards.
 
-Two counters per UTC day, each a DynamoDB item that expires on its own:
+Two counters per UTC day, each a DynamoDB item that expires on its own (the table's `ttl` attribute):
   USER#<id>  / USAGE#<date>   this user's day
   GLOBAL     / USAGE#<date>   everyone's day (the circuit breaker)
 Each item holds `used` (tokens really spent) and `committed` (used plus tokens reserved by calls
@@ -81,7 +81,8 @@ def _reserve_update(
         "Update": {
             "TableName": os.environ["TABLE_NAME"],
             "Key": key,
-            "UpdateExpression": "ADD committed :estimate SET expires_at = :expires",
+            "UpdateExpression": "ADD committed :estimate SET #ttl = :expires",
+            "ExpressionAttributeNames": {"#ttl": "ttl"},
             "ConditionExpression": "attribute_not_exists(committed) OR committed <= :room",
             "ExpressionAttributeValues": {
                 ":estimate": estimate,
