@@ -4,7 +4,7 @@ import { GeneratePanel } from '../ai/GeneratePanel'
 import { LIMITS, type SongInput, getSong } from '../api'
 import { describeError } from '../errors'
 import { formatCount } from '../format'
-import { formatTags, parseTags } from '../tags'
+import { sameTags } from '../tags'
 import { useAppState } from '../state/AppStateContext'
 import { useLoaded } from '../useLoaded'
 import { Button } from '../ui/Button'
@@ -12,6 +12,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { ErrorText } from '../ui/ErrorText'
 import { TextInput } from '../ui/fields'
 import { Spinner } from '../ui/Spinner'
+import { TagInput } from '../ui/TagInput'
 import { TextEditor, type TextEditorHandle } from '../ui/TextEditor'
 
 const BLANK_SONG: SongInput = { title: '', body: '', tags: [] }
@@ -67,12 +68,12 @@ function SongEditor({ initial, songId }: SongEditorProps) {
   const editorRef = useRef<TextEditorHandle>(null)
   const [title, setTitle] = useState(initial.title)
   const [body, setBody] = useState(initial.body)
-  const [tagsText, setTagsText] = useState(formatTags(initial.tags))
+  const [tags, setTags] = useState(initial.tags)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [confirmingDiscard, setConfirmingDiscard] = useState(false)
 
-  const hasChanges = title !== initial.title || body !== initial.body || tagsText !== formatTags(initial.tags)
+  const hasChanges = title !== initial.title || body !== initial.body || sameTags(tags, initial.tags) === false
   const canSave = title.trim().length > 0 && saving === false
 
   async function save() {
@@ -84,7 +85,7 @@ function SongEditor({ initial, songId }: SongEditorProps) {
     setSaving(true)
 
     try {
-      const input = { title, body, tags: parseTags(tagsText) }
+      const input = { title, body, tags }
 
       if (songId === null) {
         await songs.create(input)
@@ -177,13 +178,7 @@ function SongEditor({ initial, songId }: SongEditorProps) {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-            <TextInput
-              aria-label="Tags"
-              placeholder="Tags, separated by commas"
-              value={tagsText}
-              onChange={(event) => setTagsText(event.target.value)}
-              className="sm:flex-1"
-            />
+            <TagInput tags={tags} onChange={setTags} className="sm:flex-1" />
 
             <p className="text-sm whitespace-nowrap text-muted sm:text-right">
               {formatCount(body.length)} / {formatCount(LIMITS.songBody)}
