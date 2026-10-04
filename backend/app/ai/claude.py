@@ -8,9 +8,9 @@ from typing import Any, Protocol
 
 import boto3
 
-# The one place the model is named. Haiku 4.5 is the cheapest model and still accepts
-# `temperature`; newer models reject it (see ADR 0015).
-MODEL = "claude-haiku-4-5"
+# The one place the model is named. Sonnet 4.6 is the newest Sonnet that still accepts
+# `temperature`; Sonnet 5 and later reject it (see ADR 0015).
+MODEL = "claude-sonnet-4-6"
 
 REQUEST_TIMEOUT_SECONDS = 25.0
 
@@ -61,7 +61,7 @@ class ClaudeGenerator:
                 system=system,
                 messages=[{"role": "user", "content": prompt}],
                 # The Anthropic SDK (1.x) has no `temperature` argument, because the newest models
-                # reject it. Haiku 4.5 accepts it, so it goes in the request body directly.
+                # reject it. Sonnet 4.6 accepts it, so it goes in the request body directly.
                 extra_body={"temperature": temperature},
             )
         except anthropic.APIError as error:
