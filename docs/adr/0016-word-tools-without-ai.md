@@ -43,7 +43,7 @@ Data sources, all bundled with the Lambda and read from local files:
   D, K and G, F and V, S and Z, and similar), such as stone / home or love / enough.
 - **Which words are offered:** only ordinary words (those WordNet knows, with simple endings such
   as -s, -ed and -ing allowed), so names and dictionary oddities stay out. They are ordered by how
-  often they appear in WordNet's sample text, then alphabetically, and capped at 80 each.
+  often they appear in WordNet's sample text, then alphabetically, and capped at 150 each.
 - **Synonyms:** words of the same WordNet meaning, then (adjectives only) words of similar
   meanings, grouped by part of speech. **Antonyms:** WordNet's direct opposites, with adjective
   "similar to" groups borrowing the opposites of their head word.

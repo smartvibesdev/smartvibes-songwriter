@@ -9,6 +9,9 @@ from app.words.extras import extra_pronunciations
 
 DATA_FILE = Path(__file__).parent / "wordnet.json.gz"
 
+# Words made by adding an ending count this many times less than the plain word they came from.
+INFLECTION_DISCOUNT = 8
+
 PART_NAMES = {"n": "noun", "v": "verb", "a": "adjective", "r": "adverb"}
 
 
@@ -62,7 +65,16 @@ def commonness(word: str) -> int:
     if word in extra_pronunciations():
         return 1
 
-    return max((common.get(form, 0) for form in base_forms(word)), default=0)
+    own = common.get(word, 0)
+
+    if own > 0:
+        return own
+
+    # An ending on a common word ("viewed", "stones") makes a weaker rhyme than a word of its own.
+    return (
+        max((common.get(form, 0) for form in base_forms(word)), default=0)
+        // INFLECTION_DISCOUNT
+    )
 
 
 def is_known_word(word: str) -> bool:

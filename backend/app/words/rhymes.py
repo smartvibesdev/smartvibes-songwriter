@@ -15,7 +15,7 @@ import cmudict
 from app.words.extras import extra_pronunciations
 from app.words.lexicon import commonness, is_known_word
 
-MAX_RESULTS = 80
+MAX_RESULTS = 150
 
 # Consonants that sound alike enough to make a near rhyme when swapped.
 SOUND_FAMILIES = [
