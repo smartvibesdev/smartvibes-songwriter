@@ -87,7 +87,7 @@ export function HomePage() {
               <SongRow
                 song={entry}
                 showKind={true}
-                onEdit={() => navigate(`/songs/${entry.id}`)}
+                href={`/songs/${entry.id}`}
                 onDelete={() => songs.setDeletingId(entry.id)}
               />
             )
