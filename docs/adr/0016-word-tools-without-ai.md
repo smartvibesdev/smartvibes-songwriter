@@ -1,5 +1,7 @@
 # 0016. Word tools without AI: rhymes, near rhymes, synonyms and antonyms
 
+See also [How the rhyme finder works](../how-rhymes-work.md) and ADR 0017.
+
 - Status: Accepted
 - Date: 2026-10-04
 
