@@ -23,7 +23,7 @@ from pathlib import Path
 PARTS = {"noun": "n", "verb": "v", "adj": "a", "adv": "r"}
 MAX_MEANINGS = 6
 MAX_SYNONYMS = 20
-MAX_ANTONYMS = 8
+MAX_ANTONYMS = 20
 MAX_SIMILAR_MEANINGS = 2
 OUTPUT = Path(__file__).parent / "app" / "words" / "wordnet.json.gz"
 
@@ -33,6 +33,9 @@ class Synset:
         self.part = part
         self.words = words
         self.antonyms: list[list[str]] = [[] for _ in words]  # per word
+        self.opposites: list[list[Synset]] = [
+            [] for _ in words
+        ]  # per word: the meanings of its antonyms
         self.head_offsets: list[str] = []  # for adjective satellites: the head synsets
         self.similar: list[Synset] = []  # adjectives: "similar to" links, both ways
 
@@ -76,6 +79,7 @@ def read_synsets(folder: Path) -> dict[tuple[str, str], Synset]:
                 int(target_hex, 16) - 1,
             )
             synset.antonyms[source_index].append(target_synset.words[target_index])
+            synset.opposites[source_index].append(target_synset)
         if symbol == "&":
             synset.head_offsets.append(target)
             synset.similar.append(target_synset)
@@ -84,13 +88,18 @@ def read_synsets(folder: Path) -> dict[tuple[str, str], Synset]:
     for synset in synsets.values():
         if synset.part == "a" and synset.head_offsets:
             borrowed = []
+            borrowed_synsets = []
             for target in synset.head_offsets:
                 head = synsets.get(("adj", target.split(":")[1]))
                 if head is not None:
                     borrowed += [word for group in head.antonyms for word in group]
-            for group in synset.antonyms:
+                    borrowed_synsets += [
+                        item for group in head.opposites for item in group
+                    ]
+            for index, group in enumerate(synset.antonyms):
                 if not group:
                     group.extend(borrowed[:3])
+                    synset.opposites[index].extend(borrowed_synsets[:3])
     return synsets
 
 
@@ -128,6 +137,7 @@ def main(folder: Path) -> None:
             synonyms: list[str] = []
             similar: list[str] = []
             antonyms: list[str] = []
+            direct: list[str] = []
             for rank, offset in enumerate(offsets[:MAX_MEANINGS]):
                 synset = synsets[(name, offset)]
                 if lemma not in synset.words:
@@ -137,10 +147,23 @@ def main(folder: Path) -> None:
                     for w in synset.words
                     if w != lemma and w == w.lower()
                 ]
-                antonyms += [
+                direct += [
                     w.replace("_", " ")
                     for w in synset.antonyms[synset.words.index(lemma)]
                 ]
+                # The opposite meaning's other words too: include -> exclude, then omit, leave out, ...
+                for opposite in synset.opposites[synset.words.index(lemma)]:
+                    antonyms += [
+                        w.replace("_", " ") for w in opposite.words if w == w.lower()
+                    ]
+                    for neighbor in (
+                        opposite.similar if rank < MAX_SIMILAR_MEANINGS else []
+                    ):
+                        antonyms += [
+                            w.replace("_", " ")
+                            for w in neighbor.words
+                            if w == w.lower()
+                        ]
                 if rank < MAX_SIMILAR_MEANINGS:
                     for neighbor in synset.similar:
                         similar += [
@@ -150,6 +173,10 @@ def main(folder: Path) -> None:
                         ]
             # Words of the same meaning first, then words of similar meanings (adjectives only).
             synonyms = list(dict.fromkeys(synonyms + similar))[:MAX_SYNONYMS]
+            # The direct opposites first, then the other words of those meanings, commoner words first.
+            antonyms = list(dict.fromkeys(direct)) + sorted(
+                dict.fromkeys(antonyms), key=lambda w: -counts.get(w, 0)
+            )
             antonyms = list(dict.fromkeys(antonyms))[:MAX_ANTONYMS]
             if synonyms or antonyms:
                 words.setdefault(lemma, []).append([part, synonyms, antonyms])

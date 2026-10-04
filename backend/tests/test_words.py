@@ -113,3 +113,11 @@ def test_extra_words_get_rhymes_and_are_offered_as_rhymes():
 
 def test_extra_words_do_not_replace_cmudict_words():
     assert rhymes.syllables_of("cap") == [1]
+
+
+def test_antonyms_include_the_other_words_of_the_opposite_meaning():
+    _, antonyms = lexicon.related_words("include")
+    opposites = antonyms[0]["words"]
+
+    assert opposites[0] == "exclude"
+    assert "omit" in opposites

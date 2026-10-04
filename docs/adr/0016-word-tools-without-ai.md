@@ -45,8 +45,9 @@ Data sources, all bundled with the Lambda and read from local files:
   as -s, -ed and -ing allowed), so names and dictionary oddities stay out. They are ordered by how
   often they appear in WordNet's sample text, then alphabetically, and capped at 150 each.
 - **Synonyms:** words of the same WordNet meaning, then (adjectives only) words of similar
-  meanings, grouped by part of speech. **Antonyms:** WordNet's direct opposites, with adjective
-  "similar to" groups borrowing the opposites of their head word.
+  meanings, grouped by part of speech. **Antonyms:** WordNet's direct opposites first (include → exclude),
+  then the other words of the opposite meaning (omit, leave out) and, for adjectives, of similar meanings,
+  commoner words first, up to 20. Adjective "similar to" groups borrow the opposites of their head word.
 - **Modern words:** CMUdict lacks much slang (finna, boujee, rizz), so `backend/app/words/extra_pronunciations.txt`
   adds about 100 entries in CMUdict's own format. They only fill gaps (CMUdict wins for a word it
   has) and are offered as rhymes like any ordinary word. Add lines to the file to teach it more.
