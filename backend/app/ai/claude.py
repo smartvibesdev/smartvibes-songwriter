@@ -4,13 +4,13 @@ and the local preview use a fake and never spend tokens."""
 import functools
 import os
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 import boto3
 
-# The one place the model is named. Haiku 4.5 is the cheapest model and still accepts
-# `temperature`; newer models reject it (see ADR 0015).
-MODEL = "claude-haiku-4-5"
+# The one place the model is named. Sonnet 4.6 is the newest Sonnet that still accepts
+# `temperature`; Sonnet 5 and later reject it (see ADR 0015).
+MODEL = "claude-sonnet-4-6"
 
 REQUEST_TIMEOUT_SECONDS = 25.0
 
@@ -39,11 +39,14 @@ class TextGenerator(Protocol):
 class ClaudeGenerator:
     """Calls the Claude API with the Anthropic SDK."""
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, http_client: Any = None):
         import anthropic
 
         self._client = anthropic.Anthropic(
-            api_key=api_key, timeout=REQUEST_TIMEOUT_SECONDS, max_retries=1
+            api_key=api_key,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+            max_retries=1,
+            http_client=http_client,
         )
 
     def generate(
@@ -55,9 +58,11 @@ class ClaudeGenerator:
             response = self._client.messages.create(
                 model=MODEL,
                 max_tokens=max_tokens,
-                temperature=temperature,
                 system=system,
                 messages=[{"role": "user", "content": prompt}],
+                # The Anthropic SDK (1.x) has no `temperature` argument, because the newest models
+                # reject it. Sonnet 4.6 accepts it, so it goes in the request body directly.
+                extra_body={"temperature": temperature},
             )
         except anthropic.APIError as error:
             raise AiUnavailable(str(error)) from error

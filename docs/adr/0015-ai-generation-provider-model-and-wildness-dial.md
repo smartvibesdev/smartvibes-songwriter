@@ -1,6 +1,6 @@
 # 0015. AI generation: provider, model and the wildness dial
 
-- Status: Accepted
+- Status: Accepted (model amended 2026-10-04: Sonnet 4.6 instead of Haiku 4.5, at the owner's request)
 - Date: 2026-10-04
 
 ## Context
@@ -14,10 +14,10 @@ Facts that shape the design (from the Claude API reference, cached 2026-09-25):
 
 - Claude's temperature runs from 0 to 1, not 0 to 2 (that range is OpenAI's).
 - The newest models (Opus 5.5, Sonnet 5.5, Sonnet 5, Fable 5.1 and others) reject any
-  non-default `temperature`, `top_p` or `top_k` with a 400 error. Haiku 4.5 and the 4.6 models
-  still accept them.
-- Haiku 4.5 costs $1 per million input tokens and $5 per million output tokens. Sonnet 5.5
-  costs $2 and $10.
+  non-default `temperature`, `top_p` or `top_k` with a 400 error. Haiku 4.5, Sonnet 4.5 and
+  4.6, and Opus 4.5 and 4.6 still accept them.
+- Haiku 4.5 costs $1 per million input tokens and $5 per million output tokens. Sonnet 4.6
+  costs $3 and $15. Sonnet 5.5 costs $2 and $10.
 - A temperature of 1 gives varied text, not gibberish, so "wild" needs more than temperature.
 
 ## Options considered
@@ -42,8 +42,10 @@ Wildness dial:
 
 - Call the **Claude API directly** with the Anthropic Python SDK. The key lives in Secrets
   Manager, is read by the Lambda only, and never reaches the browser.
-- Use **`claude-haiku-4-5`** for generation: the cheapest model, and one that accepts
-  temperature. The model ID is one constant, so it can change in one place.
+- Use **`claude-sonnet-4-6`** for generation: the newest Sonnet that accepts temperature, and
+  better writing than Haiku. (The first version of this ADR chose Haiku 4.5, the cheapest model
+  that accepts temperature; the owner chose Sonnet 4.6 for quality.) The model ID is one
+  constant, so it can change in one place.
 - The dial is **0 to 10** in the UI:
   - 0: temperature 0 and a plain, literal instruction;
   - 1 to 7: temperature rises evenly from 0 to 1;
@@ -63,11 +65,12 @@ Wildness dial:
 
 ## Consequences
 
-- A typical lyrics request (about 500 input and 1,500 output tokens) costs under one cent on
-  Haiku 4.5. The daily budget and global cap bound the worst case.
-- Haiku's writing is plainer than a larger model's. If quality disappoints, switching the model
-  constant to Sonnet 5.5 is one change, at the cost of losing real temperature (the prompt
-  constraints still apply).
+- A typical lyrics request (about 500 input and 700 output tokens) costs 1 to 2 cents on Sonnet
+  4.6. The daily budget and global cap bound the worst case: about $0.75 a day for one user and
+  $7.50 a day for everyone, if every token were output.
+- Sonnet 5 and later cannot take a temperature. Moving to them would leave the dial working
+  through the prompt constraints only. Switching is one constant, but it is a decision to make
+  on purpose.
 - Before the first deploy the owner must create an Anthropic API key and set a monthly spend
   limit there. Storing the key in Secrets Manager and granting the Lambda read access are AWS
   changes that need an approved CDK deploy.

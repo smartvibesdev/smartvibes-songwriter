@@ -3,16 +3,20 @@
 Claude is replaced by a fake, so nothing here spends tokens. DynamoDB is moto, a local fake.
 """
 
+import json
 import random
 from datetime import UTC, datetime, timedelta
 
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
 from app.ai import budget
 from app.ai.claude import (
+    MODEL,
     AiNotConfigured,
     AiUnavailable,
+    ClaudeGenerator,
     Generated,
     _shared_generator,
     get_generator,
@@ -356,3 +360,86 @@ def test_one_users_calls_do_not_use_up_another_users_budget(monkeypatch):
 
     assert client.get("/ai/usage").json()["used"] == 0
     assert client.post("/ai/generate", json={"kind": "title"}).status_code == 200
+
+
+# --- The real Claude client, with the network replaced by a stub ---
+
+
+def claude_with_stub(handler):
+    """A ClaudeGenerator whose HTTP requests go to `handler` instead of the internet."""
+    http_client = httpx2.Client(transport=httpx2.MockTransport(handler))
+
+    return ClaudeGenerator("test-key", http_client=http_client)
+
+
+def message_response(text="a fine line", input_tokens=12, output_tokens=3):
+    return httpx2.Response(
+        200,
+        json={
+            "id": "msg_test",
+            "type": "message",
+            "role": "assistant",
+            "model": MODEL,
+            "content": [{"type": "text", "text": text}],
+            "stop_reason": "end_turn",
+            "stop_sequence": None,
+            "usage": {"input_tokens": input_tokens, "output_tokens": output_tokens},
+        },
+    )
+
+
+def test_the_claude_client_sends_the_request_shape_the_api_expects():
+    sent = []
+
+    def handler(request):
+        sent.append(request)
+
+        return message_response("Tin Roof Lullaby", input_tokens=40, output_tokens=6)
+
+    generated = claude_with_stub(handler).generate(
+        system="Be brief.", prompt="Write a title.", max_tokens=40, temperature=0.5
+    )
+
+    body = json.loads(sent[0].content)
+    assert body["model"] == MODEL
+    assert body["max_tokens"] == 40
+    assert body["system"] == "Be brief."
+    assert body["messages"] == [{"role": "user", "content": "Write a title."}]
+    assert body["temperature"] == 0.5
+    assert sent[0].headers["x-api-key"] == "test-key"
+    assert (generated.text, generated.input_tokens, generated.output_tokens) == (
+        "Tin Roof Lullaby",
+        40,
+        6,
+    )
+
+
+def test_the_claude_client_sends_temperature_zero_too():
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+
+        return message_response()
+
+    claude_with_stub(handler).generate(
+        system="s", prompt="p", max_tokens=10, temperature=0.0
+    )
+
+    assert sent[0]["temperature"] == 0.0
+
+
+def test_a_provider_error_becomes_ai_unavailable():
+    def handler(request):
+        return httpx2.Response(
+            400,
+            json={
+                "type": "error",
+                "error": {"type": "invalid_request_error", "message": "no"},
+            },
+        )
+
+    with pytest.raises(AiUnavailable):
+        claude_with_stub(handler).generate(
+            system="s", prompt="p", max_tokens=10, temperature=0.5
+        )

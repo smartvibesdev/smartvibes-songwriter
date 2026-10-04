@@ -240,7 +240,9 @@ else works.
    ```
 3. The stack gives the Lambda permission to read that one secret. Its limits are set in the
    stack: 50,000 tokens per user per day (`AI_DAILY_TOKEN_BUDGET`) and 500,000 tokens for
-   everyone per day (`AI_GLOBAL_DAILY_TOKEN_CAP`). Haiku 4.5 costs $1 per million input tokens
-   and $5 per million output tokens, so the global cap is at most about $2.50 a day.
+   everyone per day (`AI_GLOBAL_DAILY_TOKEN_CAP`). Sonnet 4.6 costs $3 per million input tokens
+   and $15 per million output tokens, so even if every token were output, one user is capped at
+   about $0.75 a day and everyone together at about $7.50 a day. A typical lyrics request costs
+   1 to 2 cents.
 4. Locally, `python dev_server.py` uses a demo generator with canned text, so no key is needed.
    To try the real model from a local API, set `ANTHROPIC_API_KEY` in your shell instead.
