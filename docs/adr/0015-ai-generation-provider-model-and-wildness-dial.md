@@ -1,6 +1,6 @@
 # 0015. AI generation: provider, model and the wildness dial
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-04
 
 ## Context
@@ -38,7 +38,7 @@ Wildness dial:
   deterministic.
 - **Both** (chosen).
 
-## Decision (proposed)
+## Decision
 
 - Call the **Claude API directly** with the Anthropic Python SDK. The key lives in Secrets
   Manager, is read by the Lambda only, and never reaches the browser.
