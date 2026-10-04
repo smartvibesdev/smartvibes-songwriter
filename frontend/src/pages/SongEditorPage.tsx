@@ -1,5 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { GeneratePanel } from '../ai/GeneratePanel'
 import { LIMITS, type SongInput, getSong } from '../api'
 import { describeError } from '../errors'
 import { formatCount } from '../format'
@@ -11,7 +12,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { ErrorText } from '../ui/ErrorText'
 import { TextInput } from '../ui/fields'
 import { Spinner } from '../ui/Spinner'
-import { TextEditor } from '../ui/TextEditor'
+import { TextEditor, type TextEditorHandle } from '../ui/TextEditor'
 
 const BLANK_SONG: SongInput = { title: '', body: '', tags: [] }
 
@@ -62,7 +63,8 @@ type SongEditorProps = {
 
 function SongEditor({ initial, songId }: SongEditorProps) {
   const navigate = useNavigate()
-  const { songs, notebook } = useAppState()
+  const { songs, fragments, notebook } = useAppState()
+  const editorRef = useRef<TextEditorHandle>(null)
   const [title, setTitle] = useState(initial.title)
   const [body, setBody] = useState(initial.body)
   const [tagsText, setTagsText] = useState(formatTags(initial.tags))
@@ -151,38 +153,51 @@ function SongEditor({ initial, songId }: SongEditorProps) {
 
       {error && <ErrorText>{error}</ErrorText>}
 
-      <TextInput
-        aria-label="Song title"
-        placeholder="Title"
-        value={title}
-        onChange={(event) => setTitle(event.target.value)}
-        maxLength={LIMITS.title}
-        className="font-display text-xl font-semibold"
-        required
-      />
+      <div className="flex flex-col gap-4 lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="flex flex-col gap-4 lg:min-h-0">
+          <TextInput
+            aria-label="Song title"
+            placeholder="Title"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            maxLength={LIMITS.title}
+            className="font-display text-xl font-semibold"
+            required
+          />
 
-      <div className="h-[55vh] rounded-2xl border border-border bg-card focus-within:border-primary-text focus-within:ring-2 focus-within:ring-primary-text/30 lg:h-auto lg:min-h-0 lg:flex-1">
-        <TextEditor
-          initialValue={initial.body}
-          onChange={setBody}
-          label="Song lyrics"
-          placeholderText="Lyrics"
-          maxLength={LIMITS.songBody}
-        />
-      </div>
+          <div className="h-[55vh] rounded-2xl border border-border bg-card focus-within:border-primary-text focus-within:ring-2 focus-within:ring-primary-text/30 lg:h-auto lg:min-h-0 lg:flex-1">
+            <TextEditor
+              ref={editorRef}
+              initialValue={initial.body}
+              onChange={setBody}
+              label="Song lyrics"
+              placeholderText="Lyrics"
+              maxLength={LIMITS.songBody}
+            />
+          </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-        <TextInput
-          aria-label="Tags"
-          placeholder="Tags, separated by commas"
-          value={tagsText}
-          onChange={(event) => setTagsText(event.target.value)}
-          className="sm:flex-1"
-        />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+            <TextInput
+              aria-label="Tags"
+              placeholder="Tags, separated by commas"
+              value={tagsText}
+              onChange={(event) => setTagsText(event.target.value)}
+              className="sm:flex-1"
+            />
 
-        <p className="text-sm whitespace-nowrap text-muted sm:text-right">
-          {formatCount(body.length)} / {formatCount(LIMITS.songBody)}
-        </p>
+            <p className="text-sm whitespace-nowrap text-muted sm:text-right">
+              {formatCount(body.length)} / {formatCount(LIMITS.songBody)}
+            </p>
+          </div>
+        </div>
+
+        <div className="lg:min-h-0 lg:overflow-y-auto">
+          <GeneratePanel
+            onUseTitle={(text) => setTitle(text.slice(0, LIMITS.title))}
+            onAddToLyrics={(text) => editorRef.current?.append(text)}
+            onSaveFragment={(text) => fragments.create({ text, tags: ['ai'] })}
+          />
+        </div>
       </div>
 
       <ConfirmDialog

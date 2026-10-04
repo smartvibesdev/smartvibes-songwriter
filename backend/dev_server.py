@@ -28,6 +28,31 @@ WEB_APP_ORIGIN = "http://localhost:5173"
 TABLE_NAME = "local-preview-table"
 USER_ID = "local-preview-user"
 
+
+class DemoGenerator:
+    """Stands in for Claude in the local preview: canned text, no key, no spend.
+
+    It echoes the temperature it was given, so moving the wildness dial is visible.
+    """
+
+    def generate(self, *, system, prompt, max_tokens, temperature):
+        from app.ai.claude import Generated
+
+        if "song title" in prompt:
+            text = "Tin Roof Lullaby"
+        elif "lyric fragment" in prompt:
+            text = f"the porch light hums a borrowed tune (demo, temperature {temperature})"
+        else:
+            text = (
+                "The kitchen window holds the rain\nlike a letter you forgot to send\n\n"
+                f"We sang it slow, we sang it plain\n(demo lyrics, temperature {temperature})"
+            )
+
+        return Generated(
+            text=text, input_tokens=len(prompt) // 3, output_tokens=len(text) // 3
+        )
+
+
 SAMPLE_FRAGMENTS = [
     ("the porch light hums a lullaby for moths", ["night", "porch"]),
     ("we were all headlights and no map", ["highway", "leaving"]),
@@ -108,6 +133,7 @@ def main() -> None:
         if arguments.big:
             add_bulk_data()
 
+        from app.ai.claude import get_generator
         from app.main import app, get_claims
 
         # In AWS, API Gateway checks the token and passes the user's claims in. Here, pretend.
@@ -115,6 +141,9 @@ def main() -> None:
             "sub": USER_ID,
             "email": "preview@example.com",
         }
+
+        # AI generation answers with canned text here, so no API key is needed.
+        app.dependency_overrides[get_generator] = DemoGenerator
 
         # In AWS, API Gateway adds the CORS headers. Here, the API has to.
         app.add_middleware(

@@ -5,6 +5,8 @@ from typing import Annotated, Generic, Literal, TypeVar
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 
+from app.ai.prompts import DIAL_MAX, DIAL_MIN, MAX_SEED_LENGTH
+
 MAX_TITLE = 200
 MAX_SONG_BODY = 20_000
 MAX_FRAGMENT_TEXT = 2_000
@@ -158,3 +160,36 @@ class NotebookParams(ListParams):
     """Query parameters for the mixed list on Home: the list parameters plus which kinds."""
 
     scope: Scope = "both"
+
+
+class GenerateIn(BaseModel):
+    """What a client sends to ask for generated text."""
+
+    kind: Literal["title", "lyrics", "fragment"]
+    # Optional starting idea or text. Empty means "invent something".
+    seed: Annotated[str, StringConstraints(max_length=MAX_SEED_LENGTH)] = ""
+    # The wildness dial: 0 is predictable, 10 is wild.
+    dial: int = Field(5, ge=DIAL_MIN, le=DIAL_MAX)
+
+
+class TokenCount(BaseModel):
+    input: int
+    output: int
+
+
+class BudgetOut(BaseModel):
+    """The signed-in user's AI token budget for today (UTC), for the token meter."""
+
+    used: int
+    limit: int
+    remaining: int
+
+
+class GenerateOut(BaseModel):
+    kind: Literal["title", "lyrics", "fragment"]
+    text: str
+    dial: int
+    # The temperature that was sent to Claude (0 to 1).
+    temperature: float
+    tokens: TokenCount
+    budget: BudgetOut

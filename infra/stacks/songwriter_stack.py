@@ -15,6 +15,7 @@ from aws_cdk import (
     aws_lambda as _lambda,
     aws_s3 as s3,
     aws_s3_deployment as s3deploy,
+    aws_secretsmanager as secretsmanager,
 )
 from constructs import Construct
 
@@ -201,6 +202,13 @@ class SongwriterStack(cdk.Stack):
             use_cognito_provided_values=True,
         )
 
+        # --- Anthropic API key (AI generation, ADR 0015) ---
+        # The key is NOT in the code or in CloudFormation. Create the secret once per account
+        # (see docs/deployment.md); the Lambda reads it at run time.
+        anthropic_secret = secretsmanager.Secret.from_secret_name_v2(
+            self, "AnthropicApiKey", "smartvibes-songwriter/anthropic-api-key"
+        )
+
         # --- Lambda: FastAPI via Mangum ---
         api_fn = _lambda.Function(
             self,
@@ -224,9 +232,16 @@ class SongwriterStack(cdk.Stack):
             ),
             memory_size=512,
             timeout=cdk.Duration.seconds(30),
-            environment={"TABLE_NAME": table.table_name},
+            environment={
+                "TABLE_NAME": table.table_name,
+                "ANTHROPIC_SECRET_ID": anthropic_secret.secret_name,
+                # Daily token limits for AI generation: per user, and for everyone together.
+                "AI_DAILY_TOKEN_BUDGET": "50000",
+                "AI_GLOBAL_DAILY_TOKEN_CAP": "500000",
+            },
         )
         table.grant_read_write_data(api_fn)
+        anthropic_secret.grant_read(api_fn)
 
         # --- API Gateway HTTP API with Cognito JWT authorizer ---
         allowed_origins = [f"https://{distribution.distribution_domain_name}", "http://localhost:5173"]

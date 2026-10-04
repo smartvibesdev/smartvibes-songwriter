@@ -23,3 +23,4 @@ Format: [0000-template.md](0000-template.md)
 | [0012](0012-paged-lists-for-thousands-of-items.md) | Paged lists and filters for thousands of items | Accepted |
 | [0013](0013-app-level-state-for-the-screens.md) | App-level state for the screens | Accepted |
 | [0014](0014-plain-lists-read-only-the-page.md) | Plain lists read only the page, not every item | Accepted |
+| [0015](0015-ai-generation-provider-model-and-wildness-dial.md) | AI generation: provider, model and the wildness dial | Accepted |

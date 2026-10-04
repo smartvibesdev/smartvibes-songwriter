@@ -6,11 +6,17 @@ from mangum import Mangum
 from pydantic import BaseModel
 
 from app import service
+from app.ai import budget
+from app.ai import service as ai_service
+from app.ai.claude import AiNotConfigured, AiUnavailable, TextGenerator, get_generator
 from app.models import (
     MAX_TAG_LENGTH,
     MAX_TAGS,
+    BudgetOut,
     Fragment,
     FragmentIn,
+    GenerateIn,
+    GenerateOut,
     ListParams,
     NotebookEntry,
     NotebookParams,
@@ -20,6 +26,7 @@ from app.models import (
     Song,
     SongIn,
     TagCount,
+    TokenCount,
 )
 
 app = FastAPI(title="SmartVibes Songwriter API")
@@ -28,6 +35,19 @@ app = FastAPI(title="SmartVibes Songwriter API")
 @app.exception_handler(service.NotFoundError)
 def not_found_handler(request: Request, error: service.NotFoundError) -> JSONResponse:
     return JSONResponse(status_code=404, content={"detail": "Not found"})
+
+
+@app.exception_handler(AiNotConfigured)
+def ai_not_configured_handler(request: Request, error: AiNotConfigured) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"detail": "AI is not set up yet"})
+
+
+@app.exception_handler(AiUnavailable)
+def ai_unavailable_handler(request: Request, error: AiUnavailable) -> JSONResponse:
+    return JSONResponse(
+        status_code=502,
+        content={"detail": "The AI service could not be reached. Try again."},
+    )
 
 
 class Me(BaseModel):
@@ -170,6 +190,46 @@ def list_notebook(
         params.page,
         params.page_size,
         params.scope,
+    )
+
+
+# --- AI generation (every call goes through the token checkpoint in app/ai) ---
+
+
+def _budget_out(usage: budget.Usage) -> BudgetOut:
+    return BudgetOut(used=usage.used, limit=usage.limit, remaining=usage.remaining)
+
+
+@app.get("/ai/usage")
+def ai_usage(user_id: UserId) -> BudgetOut:
+    return _budget_out(budget.get_usage(user_id))
+
+
+@app.post("/ai/generate")
+def ai_generate(
+    user_id: UserId,
+    body: GenerateIn,
+    generator: Annotated[TextGenerator, Depends(get_generator)],
+) -> GenerateOut:
+    try:
+        result = ai_service.generate(
+            user_id, generator, body.kind, body.seed, body.dial
+        )
+    except budget.BudgetExceeded as error:
+        if error.scope == "global":
+            detail = "AI is paused for everyone for today. Try again tomorrow."
+        else:
+            detail = "You have used today's AI budget. It resets at midnight UTC."
+
+        raise HTTPException(status_code=429, detail=detail) from error
+
+    return GenerateOut(
+        kind=result.kind,
+        text=result.text,
+        dial=result.dial,
+        temperature=result.temperature,
+        tokens=TokenCount(input=result.input_tokens, output=result.output_tokens),
+        budget=_budget_out(result.usage),
     )
 
 

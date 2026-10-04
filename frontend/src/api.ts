@@ -46,7 +46,26 @@ export type Scope = 'both' | 'songs' | 'fragments'
 export type TagCount = { tag: string; count: number }
 
 /** Size limits enforced by the backend (keep in sync with backend/app/models.py). */
-export const LIMITS = { title: 200, songBody: 20_000, fragmentText: 2_000 }
+export const LIMITS = { title: 200, songBody: 20_000, fragmentText: 2_000, aiSeed: 2_000 }
+
+/** What AI generation can write. */
+export type GenerateKind = 'title' | 'lyrics' | 'fragment'
+
+/** What to generate: a kind, an optional seed text, and the wildness dial (0 predictable to 10 wild). */
+export type GenerateInput = { kind: GenerateKind; seed: string; dial: number }
+
+/** A user's AI token budget for today (UTC). */
+export type TokenBudget = { used: number; limit: number; remaining: number }
+
+/** What `POST /ai/generate` returns: the text, what it cost, and the budget left. */
+export type Generated = {
+  kind: GenerateKind
+  text: string
+  dial: number
+  temperature: number
+  tokens: { input: number; output: number }
+  budget: TokenBudget
+}
 
 /** A failed API call. `status` is the HTTP status, or 0 if the server was unreachable. */
 export class ApiError extends Error {
@@ -210,3 +229,7 @@ export function randomFragments(query: RandomQuery = {}) {
 
   return request<Fragment[]>('GET', `/fragments/random?${params}`)
 }
+
+export const generateText = (input: GenerateInput) => request<Generated>('POST', '/ai/generate', input)
+
+export const getAiUsage = () => request<TokenBudget>('GET', '/ai/usage')
