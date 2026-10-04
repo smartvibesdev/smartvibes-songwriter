@@ -1,9 +1,16 @@
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { EditorState } from '@codemirror/state'
 import { drawSelection, EditorView, keymap, placeholder } from '@codemirror/view'
-import { useEffect, useRef } from 'react'
+import { type Ref, useEffect, useImperativeHandle, useRef } from 'react'
+
+/** What a parent can ask the editor to do. */
+export type TextEditorHandle = {
+  /** Add text at the end (after a blank line if there is already text) and move the cursor after it. */
+  append: (text: string) => void
+}
 
 type TextEditorProps = {
+  ref?: Ref<TextEditorHandle>
   /** The text when the editor first appears. Changing it later does not replace what is typed. */
   initialValue: string
   onChange: (value: string) => void
@@ -30,8 +37,9 @@ const THEME = EditorView.theme({
  * A plain-text editor (CodeMirror 6) for lyrics: line wrapping, undo and redo, no formatting.
  * It owns the text while it is on screen and reports every change through `onChange`.
  */
-export function TextEditor({ initialValue, onChange, label, placeholderText = '', maxLength }: TextEditorProps) {
+export function TextEditor({ ref, initialValue, onChange, label, placeholderText = '', maxLength }: TextEditorProps) {
   const host = useRef<HTMLDivElement>(null)
+  const view = useRef<EditorView | null>(null)
   const startingText = useRef(initialValue)
   const reportChange = useRef(onChange)
 
@@ -39,12 +47,31 @@ export function TextEditor({ initialValue, onChange, label, placeholderText = ''
     reportChange.current = onChange
   }, [onChange])
 
+  useImperativeHandle(ref, () => ({
+    append(text: string) {
+      const editor = view.current
+
+      if (editor === null) {
+        return
+      }
+
+      const end = editor.state.doc.length
+      const separator = end > 0 ? '\n\n' : ''
+
+      editor.dispatch({
+        changes: { from: end, insert: separator + text },
+        selection: { anchor: end + separator.length + text.length },
+        scrollIntoView: true,
+      })
+    },
+  }))
+
   useEffect(() => {
     if (host.current === null) {
       return
     }
 
-    const view = new EditorView({
+    const editor = new EditorView({
       parent: host.current,
       state: EditorState.create({
         doc: startingText.current,
@@ -66,7 +93,12 @@ export function TextEditor({ initialValue, onChange, label, placeholderText = ''
       }),
     })
 
-    return () => view.destroy()
+    view.current = editor
+
+    return () => {
+      view.current = null
+      editor.destroy()
+    }
   }, [label, maxLength, placeholderText])
 
   return <div ref={host} className="h-full min-h-0" />
