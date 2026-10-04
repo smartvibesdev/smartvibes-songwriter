@@ -1,17 +1,18 @@
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, Response
 from fastapi.responses import JSONResponse
 from mangum import Mangum
 from pydantic import BaseModel
 
-from app import service
+from app import service, words
 from app.ai import budget
 from app.ai import service as ai_service
 from app.ai.claude import AiNotConfigured, AiUnavailable, TextGenerator, get_generator
 from app.models import (
     MAX_TAG_LENGTH,
     MAX_TAGS,
+    MAX_WORD_LENGTH,
     BudgetOut,
     Fragment,
     FragmentIn,
@@ -27,6 +28,7 @@ from app.models import (
     SongIn,
     TagCount,
     TokenCount,
+    WordInfo,
 )
 
 app = FastAPI(title="SmartVibes Songwriter API")
@@ -231,6 +233,19 @@ def ai_generate(
         tokens=TokenCount(input=result.input_tokens, output=result.output_tokens),
         budget=_budget_out(result.usage),
     )
+
+
+# --- Word tools: rhymes, synonyms, antonyms (dictionaries only, no AI, no tokens) ---
+
+
+@app.get("/words/{word}")
+def word_lookup(
+    user_id: UserId, word: Annotated[str, Path(max_length=MAX_WORD_LENGTH)]
+) -> WordInfo:
+    try:
+        return words.look_up(word)
+    except words.NotAWordError as error:
+        raise HTTPException(status_code=422, detail="Enter a single word.") from error
 
 
 # --- Search ---

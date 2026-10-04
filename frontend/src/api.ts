@@ -233,3 +233,22 @@ export function randomFragments(query: RandomQuery = {}) {
 export const generateText = (input: GenerateInput) => request<Generated>('POST', '/ai/generate', input)
 
 export const getAiUsage = () => request<TokenBudget>('GET', '/ai/usage')
+
+/** A rhyming word and how many syllables it has. */
+export type RhymeWord = { word: string; syllables: number }
+
+/** Words of one part of speech ("noun", "verb", "adjective", "adverb"). */
+export type PartOfSpeechWords = { part: string; words: string[] }
+
+/** What the dictionaries know about one word (no AI). `rhymes_known` is false when it has no known sounds. */
+export type WordInfo = {
+  word: string
+  rhymes_known: boolean
+  syllables: number[]
+  rhymes: RhymeWord[]
+  near_rhymes: RhymeWord[]
+  synonyms: PartOfSpeechWords[]
+  antonyms: PartOfSpeechWords[]
+}
+
+export const lookUpWord = (word: string) => request<WordInfo>('GET', `/words/${encodeURIComponent(word)}`)
