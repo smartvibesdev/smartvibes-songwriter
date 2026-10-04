@@ -1,33 +1,25 @@
-import type { Song, SongInput } from '../api'
+import { Link } from 'react-router'
+import type { Song } from '../api'
 import { formatDate } from '../format'
-import { SongForm } from '../forms/SongForm'
 import { hashTags } from '../tags'
 import { Button } from '../ui/Button'
+import { CARD, CARD_LINK } from './cardLink'
 
 type SongRowProps = {
   song: Song
-  /** Show the form in place of the row. */
-  editing: boolean
   /** Show a small "SONG" label, for lists that mix songs and fragments. */
   showKind?: boolean
-  onEdit: () => void
-  onCancelEdit: () => void
-  onSave: (input: SongInput) => Promise<void>
+  /** Where the card goes when clicked: the song page. */
+  href: string
   onDelete: () => void
 }
 
-/** One song in a list: title, the start of the lyrics, tags, date, and Edit and Delete. */
-export function SongRow({ song, editing, showKind, onEdit, onCancelEdit, onSave, onDelete }: SongRowProps) {
-  if (editing) {
-    return (
-      <div className="p-6 sm:px-8 sm:py-7">
-        <SongForm initial={song} submitLabel="Save" clearOnSuccess={false} onSubmit={onSave} onCancel={onCancelEdit} />
-      </div>
-    )
-  }
-
+/** One song in a list: title, the start of the lyrics, tags, date, and Delete. The whole card opens the song. */
+export function SongRow({ song, showKind, href, onDelete }: SongRowProps) {
   return (
-    <div className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:gap-6 sm:px-8 sm:py-5 lg:py-3.5">
+    <div
+      className={`${CARD} flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:gap-6 sm:px-8 sm:py-5 lg:py-3.5`}
+    >
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {/* Phones: "SONG – Title" on one line. Wider screens: the label above the title. */}
         <div className="flex flex-wrap items-baseline gap-x-2 sm:flex-col sm:items-start sm:gap-1">
@@ -37,7 +29,11 @@ export function SongRow({ song, editing, showKind, onEdit, onCancelEdit, onSave,
             </p>
           )}
 
-          <h2 className="font-display text-lg font-semibold sm:text-xl">{song.title}</h2>
+          <h2 className="font-display text-lg font-semibold sm:text-xl">
+            <Link to={href} className={CARD_LINK}>
+              {song.title}
+            </Link>
+          </h2>
         </div>
 
         {song.body && <p className="line-clamp-2 leading-snug whitespace-pre-line text-soft">{song.body}</p>}
@@ -49,15 +45,9 @@ export function SongRow({ song, editing, showKind, onEdit, onCancelEdit, onSave,
       <div className="flex items-center justify-between gap-6 sm:contents">
         <p className="text-sm whitespace-nowrap text-muted">{formatDate(song.created_at)}</p>
 
-        <div className="flex gap-4">
-          <Button variant="link" className="text-sm" onClick={onEdit}>
-            Edit
-          </Button>
-
-          <Button variant="quiet" className="text-sm" onClick={onDelete}>
-            Delete
-          </Button>
-        </div>
+        <Button variant="quiet" className="relative z-10 text-sm" onClick={onDelete}>
+          Delete
+        </Button>
       </div>
     </div>
   )

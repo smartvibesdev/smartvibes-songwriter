@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { BrowserRouter } from 'react-router'
 import { AppShell } from './AppShell'
 import { completeOAuthSignIn, getIdToken } from './auth'
 import { describeError } from './errors'
@@ -20,9 +21,11 @@ function App() {
 
   if (session === 'signedIn') {
     return (
-      <AppStateProvider>
-        <AppShell onSignedOut={() => setSession('signedOut')} />
-      </AppStateProvider>
+      <BrowserRouter>
+        <AppStateProvider>
+          <AppShell onSignedOut={() => setSession('signedOut')} />
+        </AppStateProvider>
+      </BrowserRouter>
     )
   }
 
