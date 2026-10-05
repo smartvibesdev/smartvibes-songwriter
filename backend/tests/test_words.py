@@ -121,3 +121,10 @@ def test_antonyms_include_the_other_words_of_the_opposite_meaning():
 
     assert opposites[0] == "exclude"
     assert "omit" in opposites
+
+
+def test_rhyme_data_is_up_to_date_with_the_extras_file():
+    # If this fails, run `python build_rhyme_data.py` and commit app/words/rhymes.json.gz.
+    import build_rhyme_data
+
+    assert rhymes._data()["extras_hash"] == build_rhyme_data.extras_hash()
