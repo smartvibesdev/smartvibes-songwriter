@@ -4,7 +4,7 @@ Instructions for Claude Code when working in this repository.
 
 ## Working agreement
 
-- **Commit finished work on a branch, and nothing more.** Before starting a task, and whenever the user says a PR was merged, run `git fetch origin`, `git checkout main` and `git pull` so `main` is current (fetch and pull are always fine; never push). Then start the task on a short, descriptive branch created from `main`. Work on one thing at a time: keep one branch open for review, make any follow-up tweaks as more commits on that same branch, and start the next branch only after the user says the previous PR is merged. A new branch is always created from the latest `main`, never from another unmerged branch. Run `git branch --show-current` before every commit and stop if it says `main`. When the task passes its checks, commit it without being asked, unless the user has said not to; never commit unfinished or failing work, and never commit to `main`. Then report the commit hash and the exact push command.
+- **Never commit. The user commits.** Before starting a task, and whenever the user says a PR was merged, run `git fetch origin`, `git checkout main` and `git pull` so `main` is current (fetch and pull are always fine; never push). Then start the task on a short, descriptive branch created from `main` (creating the branch is fine). Work on one thing at a time: keep one branch open for review, make follow-up tweaks on that same branch, and start the next branch only after the user says the previous PR is merged. A new branch is always created from the latest `main`, never from another unmerged branch. Leave finished work uncommitted in the working tree for the user to review and commit. Do not run `git add`, `git commit`, `git stash`, `git reset` or `git revert` unless the user asks in that message. When the task passes its checks, report which files changed, say what was and was not verified, and suggest a commit message (a short summary line, a short body when useful, ending with the `Co-Authored-By` line from the session's attribution instructions).
 - **Never push, merge, open a PR, or deploy unless the user explicitly asks in that message.** One approval covers only that one action.
 - **This includes `cdk deploy` and any other command that creates, changes, or deletes AWS resources.** Read-only checks (for example `cdk diff`, `cdk synth`, `aws sts get-caller-identity`) are fine.
 - **Ask before making AWS assumptions** (region, account, naming, permissions).
@@ -13,9 +13,9 @@ Instructions for Claude Code when working in this repository.
 
 ## Git
 
-- Commit as the `smartvibesdev` identity. The author email is set in this repo's `.git/config` (`165607164+smartvibesdev@users.noreply.github.com`). Do not change it, and do not use `jk@jeffknutson.net`.
+- When the user asks you to commit, commit as the `smartvibesdev` identity. The author email is set in this repo's `.git/config` (`165607164+smartvibesdev@users.noreply.github.com`). Do not change it, and do not use `jk@jeffknutson.net`.
 - Work on a branch, never directly on `main`. Branch names are short and descriptive.
-- Commit messages: a short summary line, and a short body when useful. End with the `Co-Authored-By` line specified by the session's attribution instructions.
+- Commit messages (when asked to commit, or when suggesting one): a short summary line, and a short body when useful. End with the `Co-Authored-By` line specified by the session's attribution instructions.
 
 ## Project
 

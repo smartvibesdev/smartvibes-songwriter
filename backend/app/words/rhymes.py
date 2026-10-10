@@ -2,6 +2,7 @@
 
   exact rhyme: the same rhyming part, with a different sound before it (stone, alone, bone).
   near rhyme:  the same vowels, and consonants that are close cousins, such as N and M (stone, home, roam).
+  slant rhyme: the same vowel sounds with any consonants (cranky, happy, snappy; stone, loan, both).
 
 The data comes from the CMU Pronouncing Dictionary and our extras, built ahead of time by
 build_rhyme_data.py (see phonetics.py for the sound rules), so the first request only reads a file.
@@ -22,8 +23,8 @@ def _data() -> dict:
         return json.load(file)
 
 
-def _groups(word: str) -> list[tuple[str, str, str, int]]:
-    """The (exact key, near key, whole sound, syllables) of each pronunciation of the word."""
+def _groups(word: str) -> list[tuple[str, str, str, int, str]]:
+    """The (exact key, near key, whole sound, syllables, vowels) of each pronunciation of the word."""
     text = _data()["words"].get(word)
 
     if text is None:
@@ -32,19 +33,19 @@ def _groups(word: str) -> list[tuple[str, str, str, int]]:
     groups = []
 
     for group in text.split(";"):
-        exact_key, near_key, sound, syllables = group.split("|")
-        groups.append((exact_key, near_key, sound, int(syllables)))
+        exact_key, near_key, sound, syllables, vowels = group.split("|")
+        groups.append((exact_key, near_key, sound, int(syllables), vowels))
 
     return groups
 
 
 def syllables_of(word: str) -> list[int]:
     """The possible syllable counts of a word (some words have more than one pronunciation)."""
-    return sorted({syllables for *_, syllables in _groups(word)})
+    return sorted({group[3] for group in _groups(word)})
 
 
 def _sounds(word: str) -> set[str]:
-    return {sound for _, _, sound, _ in _groups(word)}
+    return {group[2] for group in _groups(word)}
 
 
 def _ranked(words: list[str], exclude: set[str], skip_sounds: set[str]) -> list[dict]:
@@ -63,20 +64,22 @@ def _ranked(words: list[str], exclude: set[str], skip_sounds: set[str]) -> list[
     return chosen
 
 
-def find_rhymes(word: str) -> tuple[bool, list[dict], list[dict]]:
-    """(known, exact rhymes, near rhymes). Unknown words are ones the dictionary has no sounds for."""
+def find_rhymes(word: str) -> tuple[bool, list[dict], list[dict], list[dict]]:
+    """(known, exact, near, slant rhymes). Unknown words are ones the dictionary has no sounds for."""
     groups = _groups(word)
 
     if groups == []:
-        return False, [], []
+        return False, [], [], []
 
     data = _data()
     exact_words: list[str] = []
     near_words: list[str] = []
+    loose_words: list[str] = []
 
-    for exact_key, near_key, _, _ in groups:
+    for exact_key, near_key, _, _, vowels in groups:
         exact_words += data["exact"].get(exact_key, [])
         near_words += data["near"].get(near_key, [])
+        loose_words += data["loose"].get(vowels, [])
 
     # Words that rhyme exactly are not also listed as near. The word and its homophones (same sound,
     # other spelling) are not rhymes of it.
@@ -84,5 +87,14 @@ def find_rhymes(word: str) -> tuple[bool, list[dict], list[dict]]:
     own_sounds = _sounds(word)
     exact = _ranked(list(dict.fromkeys(exact_words)), {word}, own_sounds)
     near = _ranked(list(dict.fromkeys(near_words)), {word} | exact_set, own_sounds)
+    taken = exact_set | set(near_words)
 
-    return True, exact, near
+    # Slant rhymes of about the same length as the word come first (a stable sort keeps the common ones first).
+    length = syllables_of(word)[0]
+    by_length = sorted(
+        dict.fromkeys(loose_words),
+        key=lambda other: abs(syllables_of(other)[0] - length),
+    )
+    loose = _ranked(by_length, {word} | taken, own_sounds)
+
+    return True, exact, near, loose

@@ -9,9 +9,10 @@ Doing this work ahead of time keeps the Lambda fast: it only reads this file, an
 or sort 100,000 words on the first request. cmudict is needed only here, not in the Lambda.
 
 The output is one JSON object:
-  "words": {word: "exact|near|sound|syllables;..."}  one group per pronunciation, for every word
+  "words": {word: "exact|near|sound|syllables|vowels;..."}  one group per pronunciation, for every word
   "exact": {exact key: [words]}  ordinary words only, most common first, at most KEEP per key
   "near":  {near key: [words]}   the same, for near rhymes
+  "loose": {vowel key: [words]}  the same, for slant rhymes (same vowel sounds, any consonants)
   "extras_hash": a fingerprint of the extras file, so a test can tell the data is out of date
 """
 
@@ -53,6 +54,7 @@ def build() -> dict:
     words: dict[str, str] = {}
     exact: dict[str, set[str]] = defaultdict(set)
     near: dict[str, set[str]] = defaultdict(set)
+    loose: dict[str, set[str]] = defaultdict(set)
 
     for word, options in pronunciations.items():
         groups = []
@@ -64,11 +66,13 @@ def build() -> dict:
                 phonetics.sound_key(phonemes),
             )
             syllables = str(phonetics.syllable_count(phonemes))
-            groups.append("|".join([*keys, syllables]))
+            vowels = phonetics.vowel_key(phonemes)
+            groups.append("|".join([*keys, syllables, vowels]))
 
             if word.isalpha() and is_known_word(word):
                 exact[keys[0]].add(word)
                 near[keys[1]].add(word)
+                loose[vowels].add(word)
 
         words[word] = ";".join(dict.fromkeys(groups))
 
@@ -79,6 +83,7 @@ def build() -> dict:
         "words": words,
         "exact": {key: ranked(group) for key, group in exact.items()},
         "near": {key: ranked(group) for key, group in near.items()},
+        "loose": {key: ranked(group) for key, group in loose.items()},
         "extras_hash": extras_hash(),
     }
 

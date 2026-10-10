@@ -33,9 +33,21 @@ export function SignInForm({ onSignedIn, notice }: SignInFormProps) {
   const [message, setMessage] = useState('')
 
   const showPasswordField = mode === 'signIn' || mode === 'signUp'
+  const hasEmail = email.trim().length > 0
+  const hasPassword = password.length > 0
+  const hasCode = code.trim().length > 0
+
+  // The main button works only once every box on the screen has something in it.
+  const isComplete = mode === 'confirm' ? hasEmail && hasCode : hasEmail && hasPassword
 
   async function submit(e: FormEvent) {
     e.preventDefault()
+
+    // Pressing Enter in a box would otherwise send the form even while the button is disabled.
+    if (isComplete === false) {
+      return
+    }
+
     setMessage('')
 
     try {
@@ -90,7 +102,9 @@ export function SignInForm({ onSignedIn, notice }: SignInFormProps) {
         />
       )}
 
-      <Button type="submit">{SUBMIT_LABELS[mode]}</Button>
+      <Button type="submit" disabled={isComplete === false}>
+        {SUBMIT_LABELS[mode]}
+      </Button>
 
       {mode === 'signIn' && (
         <div className="flex flex-col items-center gap-3">

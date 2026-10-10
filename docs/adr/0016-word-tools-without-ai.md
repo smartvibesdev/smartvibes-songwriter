@@ -45,6 +45,9 @@ Data sources, all bundled with the Lambda and read from local files:
   homophones of the word left out ("night" does not rhyme with "knight").
 - **Near rhyme:** the same vowels, with consonants that are close cousins swapped (N and M, T and
   D, K and G, F and V, S and Z, and similar), such as stone / home or love / enough.
+- **Slant rhyme:** the same vowel sounds in the rhyming part, with any consonants (cranky / happy / family).
+  It is added because CMUdict has very few exact rhymes for some words (cranky has five), and songwriters use
+  loose rhymes. It leaves out words already listed as exact or near, and lists words of a similar length first.
 - **Which words are offered:** only ordinary words (those WordNet knows, with simple endings such
   as -s, -ed and -ing allowed), so names and dictionary oddities stay out. They are ordered by how
   often they appear in WordNet's sample text, then alphabetically, and capped at 150 each.

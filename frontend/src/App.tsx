@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter } from 'react-router'
+import { AssistantProvider } from './ai/AssistantProvider'
 import { AppShell } from './AppShell'
 import { completeOAuthSignIn, getIdToken } from './auth'
 import { describeError } from './errors'
@@ -23,7 +24,9 @@ function App() {
     return (
       <BrowserRouter>
         <AppStateProvider>
-          <AppShell onSignedOut={() => setSession('signedOut')} />
+          <AssistantProvider>
+            <AppShell onSignedOut={() => setSession('signedOut')} />
+          </AssistantProvider>
         </AppStateProvider>
       </BrowserRouter>
     )

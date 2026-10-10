@@ -163,6 +163,8 @@ function WordResults({ info, onPick }: WordResultsProps) {
 
       <RhymeGroup title="Near rhymes" items={info.near_rhymes} onPick={onPick} />
 
+      <RhymeGroup title="Slant rhymes" items={info.slant_rhymes} onPick={onPick} />
+
       <WordGroup title="Synonyms" groups={info.synonyms} onPick={onPick} />
 
       <WordGroup title="Antonyms" groups={info.antonyms} onPick={onPick} />

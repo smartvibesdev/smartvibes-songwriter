@@ -25,7 +25,7 @@ def clean_word(text: str) -> str:
 def look_up(text: str) -> WordInfo:
     """Rhymes, near rhymes, syllable counts, synonyms and antonyms for one word."""
     word = clean_word(text)
-    known, exact, near = rhymes.find_rhymes(word)
+    known, exact, near, slant = rhymes.find_rhymes(word)
     synonyms, antonyms = lexicon.related_words(word)
 
     return WordInfo(
@@ -34,6 +34,7 @@ def look_up(text: str) -> WordInfo:
         syllables=rhymes.syllables_of(word),
         rhymes=[RhymeWord(**item) for item in exact],
         near_rhymes=[RhymeWord(**item) for item in near],
+        slant_rhymes=[RhymeWord(**item) for item in slant],
         synonyms=[PartOfSpeechWords(**item) for item in synonyms],
         antonyms=[PartOfSpeechWords(**item) for item in antonyms],
     )

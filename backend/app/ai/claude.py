@@ -30,10 +30,41 @@ class Generated:
     output_tokens: int
 
 
+@dataclass(frozen=True)
+class ToolCall:
+    """Claude asking to use one of our tools."""
+
+    id: str
+    name: str
+    input: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ChatTurn:
+    """One reply in a chat: its text, the tools it wants to use, and what it cost."""
+
+    text: str
+    tool_calls: list[ToolCall]
+    # The reply as plain dicts, to send back to Claude on the next step if it used tools.
+    content: list[dict[str, Any]]
+    input_tokens: int
+    output_tokens: int
+
+
 class TextGenerator(Protocol):
     def generate(
         self, *, system: str, prompt: str, max_tokens: int, temperature: float
     ) -> Generated: ...
+
+    def chat(
+        self,
+        *,
+        system: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        max_tokens: int,
+        temperature: float,
+    ) -> ChatTurn: ...
 
 
 class ClaudeGenerator:
@@ -71,6 +102,56 @@ class ClaudeGenerator:
 
         return Generated(
             text=text,
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+        )
+
+    def chat(
+        self,
+        *,
+        system: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        max_tokens: int,
+        temperature: float,
+    ) -> ChatTurn:
+        import anthropic
+
+        try:
+            response = self._client.messages.create(
+                model=MODEL,
+                max_tokens=max_tokens,
+                system=system,
+                messages=messages,
+                tools=tools,
+                extra_body={"temperature": temperature},
+            )
+        except anthropic.APIError as error:
+            raise AiUnavailable(str(error)) from error
+
+        text_parts: list[str] = []
+        tool_calls: list[ToolCall] = []
+        content: list[dict[str, Any]] = []
+
+        for block in response.content:
+            if block.type == "text":
+                text_parts.append(block.text)
+                content.append({"type": "text", "text": block.text})
+            elif block.type == "tool_use":
+                tool_calls.append(ToolCall(block.id, block.name, dict(block.input)))
+                content.append(
+                    {
+                        "type": "tool_use",
+                        "id": block.id,
+                        "name": block.name,
+                        "input": dict(block.input),
+                    }
+                )
+
+        return ChatTurn(
+            text="".join(text_parts).strip(),
+            tool_calls=tool_calls,
+            content=content,
             input_tokens=response.usage.input_tokens,
             output_tokens=response.usage.output_tokens,
         )

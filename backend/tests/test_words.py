@@ -22,7 +22,7 @@ def names(items):
 
 
 def test_exact_rhymes_share_the_ending_sound():
-    known, exact, _ = rhymes.find_rhymes("stone")
+    known, exact, *_ = rhymes.find_rhymes("stone")
 
     assert known is True
     assert {"alone", "bone", "phone"} <= set(names(exact))
@@ -30,13 +30,13 @@ def test_exact_rhymes_share_the_ending_sound():
 
 
 def test_homophones_are_not_rhymes():
-    _, exact, near = rhymes.find_rhymes("night")
+    _, exact, near, _ = rhymes.find_rhymes("night")
 
     assert "knight" not in names(exact) + names(near)
 
 
 def test_near_rhymes_swap_a_similar_consonant():
-    _, exact, near = rhymes.find_rhymes("stone")
+    _, exact, near, _ = rhymes.find_rhymes("stone")
 
     assert "home" in names(near)
     assert "home" not in names(exact)
@@ -44,7 +44,7 @@ def test_near_rhymes_swap_a_similar_consonant():
 
 
 def test_unknown_word_has_no_rhymes():
-    assert rhymes.find_rhymes("zzzqx") == (False, [], [])
+    assert rhymes.find_rhymes("zzzqx") == (False, [], [], [])
 
 
 def test_syllables():
@@ -53,7 +53,7 @@ def test_syllables():
 
 
 def test_common_words_come_first():
-    _, exact, _ = rhymes.find_rhymes("stone")
+    _, exact, *_ = rhymes.find_rhymes("stone")
 
     assert names(exact).index("alone") < names(exact).index("acetone")
 
@@ -103,8 +103,8 @@ def test_route_needs_sign_in():
 
 
 def test_extra_words_get_rhymes_and_are_offered_as_rhymes():
-    known, _, _ = rhymes.find_rhymes("boujee")
-    _, rhymes_of_uh, _ = rhymes.find_rhymes("uh")
+    known, *_ = rhymes.find_rhymes("boujee")
+    _, rhymes_of_uh, *_ = rhymes.find_rhymes("uh")
 
     assert known is True
     assert "bruh" in names(rhymes_of_uh)
@@ -128,3 +128,18 @@ def test_rhyme_data_is_up_to_date_with_the_extras_file():
     import build_rhyme_data
 
     assert rhymes._data()["extras_hash"] == build_rhyme_data.extras_hash()
+
+
+def test_slant_rhymes_share_vowels_but_not_consonants():
+    _, exact, near, slant = rhymes.find_rhymes("cranky")
+
+    assert {"lanky", "hanky"} <= set(names(exact))
+    assert {"happy", "snappy"} <= set(names(slant))
+    assert set(names(slant)).isdisjoint(names(exact) + names(near))
+    assert "cranky" not in names(slant)
+
+
+def test_the_route_returns_slant_rhymes():
+    response = client.get("/words/cranky")
+
+    assert "happy" in names(response.json()["slant_rhymes"])
