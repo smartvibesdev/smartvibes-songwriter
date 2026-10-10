@@ -247,8 +247,54 @@ export type WordInfo = {
   syllables: number[]
   rhymes: RhymeWord[]
   near_rhymes: RhymeWord[]
+  slant_rhymes: RhymeWord[]
   synonyms: PartOfSpeechWords[]
   antonyms: PartOfSpeechWords[]
 }
 
 export const lookUpWord = (word: string) => request<WordInfo>('GET', `/words/${encodeURIComponent(word)}`)
+
+/** One line of the conversation sent to the assistant. */
+export type ChatMessageInput = { role: 'user' | 'assistant'; content: string }
+
+/** What the page on screen shows, so the assistant can talk about it. Line numbers start at 1. */
+export type ChatContext = {
+  page: 'song' | 'home'
+  title: string
+  lyrics: string
+  selection: string
+  selection_start_line: number | null
+  selection_end_line: number | null
+}
+
+/** One change to the lyrics. Line numbers start at 1 and refer to the lyrics as they were sent. */
+export type ChatEdit = {
+  operation: 'replace' | 'insert_after' | 'append'
+  start_line: number | null
+  end_line: number | null
+  text: string
+}
+
+/** A short dictionary answer for one word (no AI). */
+export type DictionaryLookup = {
+  word: string
+  rhymes: string[]
+  near_rhymes: string[]
+  slant_rhymes: string[]
+  synonyms: string[]
+  antonyms: string[]
+}
+
+/** What `POST /ai/chat` returns: the reply, the changes to make, any lookups, what it cost, the budget left. */
+export type ChatReply = {
+  text: string
+  edits: ChatEdit[]
+  title: string | null
+  dictionary: DictionaryLookup[]
+  tokens: { input: number; output: number }
+  budget: TokenBudget
+}
+
+export type ChatInput = { messages: ChatMessageInput[]; context: ChatContext; dial: number }
+
+export const chatWithAssistant = (input: ChatInput) => request<ChatReply>('POST', '/ai/chat', input)

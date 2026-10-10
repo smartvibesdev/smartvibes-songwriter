@@ -1,6 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { GeneratePanel } from '../ai/GeneratePanel'
+import { useAssistant } from '../ai/AssistantContext'
+import { useAssistantPage } from '../ai/useAssistantPage'
 import { WordsPanel } from '../ai/WordsPanel'
 import { LIMITS, type SongInput, getSong } from '../api'
 import { describeError } from '../errors'
@@ -65,7 +66,8 @@ type SongEditorProps = {
 
 function SongEditor({ initial, songId }: SongEditorProps) {
   const navigate = useNavigate()
-  const { songs, fragments, notebook } = useAppState()
+  const { songs, notebook } = useAppState()
+  const { open: assistantOpen } = useAssistant()
   const editorRef = useRef<TextEditorHandle>(null)
   const [title, setTitle] = useState(initial.title)
   const [body, setBody] = useState(initial.body)
@@ -73,6 +75,24 @@ function SongEditor({ initial, songId }: SongEditorProps) {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [confirmingDiscard, setConfirmingDiscard] = useState(false)
+
+  // The assistant can read this song, and change its title and lyrics, while the page is open.
+  useAssistantPage({
+    getContext: () => {
+      const selection = editorRef.current?.selection() ?? null
+
+      return {
+        title,
+        lyrics: editorRef.current?.getText() ?? body,
+        selection: selection?.text ?? '',
+        selectionStartLine: selection?.startLine ?? null,
+        selectionEndLine: selection?.endLine ?? null,
+      }
+    },
+    setTitle: (text) => setTitle(text.slice(0, LIMITS.title)),
+    applyEdits: (edits) => editorRef.current?.applyEdits(edits) ?? null,
+    undoEdits: () => editorRef.current?.undo(),
+  })
 
   const hasChanges = title !== initial.title || body !== initial.body || sameTags(tags, initial.tags) === false
   const canSave = title.trim().length > 0 && saving === false
@@ -155,7 +175,11 @@ function SongEditor({ initial, songId }: SongEditorProps) {
 
       {error && <ErrorText>{error}</ErrorText>}
 
-      <div className="flex flex-col gap-4 lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div
+        className={`flex flex-col gap-4 lg:grid lg:min-h-0 lg:flex-1 ${
+          assistantOpen ? 'lg:grid-cols-1' : 'lg:grid-cols-[minmax(0,1fr)_20rem]'
+        }`}
+      >
         <div className="flex flex-col gap-4 lg:min-h-0">
           <TextInput
             aria-label="Song title"
@@ -187,14 +211,9 @@ function SongEditor({ initial, songId }: SongEditorProps) {
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 lg:min-h-0 lg:overflow-y-auto">
+        {/* With the assistant open the page is only half the width, so the side panel steps aside (rhymes are in the chat). */}
+        <div className={`flex flex-col gap-4 lg:min-h-0 lg:overflow-y-auto ${assistantOpen ? 'lg:hidden' : ''}`}>
           <WordsPanel getSelection={() => editorRef.current?.selectedText() ?? ''} />
-
-          <GeneratePanel
-            onUseTitle={(text) => setTitle(text.slice(0, LIMITS.title))}
-            onAddToLyrics={(text) => editorRef.current?.append(text)}
-            onSaveFragment={(text) => fragments.create({ text, tags: ['ai'] })}
-          />
         </div>
       </div>
 

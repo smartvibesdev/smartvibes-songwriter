@@ -52,6 +52,72 @@ class DemoGenerator:
             text=text, input_tokens=len(prompt) // 3, output_tokens=len(text) // 3
         )
 
+    def chat(self, *, system, messages, tools, max_tokens, temperature):
+        """A canned assistant: enough to see edits, lookups and replies in the local preview."""
+        import re
+
+        from app.ai.claude import ToolCall
+
+        last = messages[-1]["content"]
+
+        if isinstance(last, list):  # Claude is answering a tool result
+            return self._turn("Here are a few that could work (demo).", [])
+
+        ask = last.lower()
+        calls = []
+        text = f"(demo reply, temperature {temperature}) I can help with that."
+
+        if "title" in ask and "set_title" in str(tools):
+            text = "How about this title?"
+            calls = [ToolCall("t1", "set_title", {"title": "Borrowed Light"})]
+        elif "improve" in ask or "selected" in ask:
+            lines = re.search(r"\(lines (\d+) to (\d+)\)", system)
+            start, end = (int(lines[1]), int(lines[2])) if lines else (1, 1)
+            text = "I made the image more concrete."
+            calls = [
+                ToolCall(
+                    "e1",
+                    "edit_lyrics",
+                    {
+                        "operation": "replace",
+                        "start_line": start,
+                        "end_line": end,
+                        "text": "a lantern swinging in the window frame",
+                    },
+                )
+            ]
+        elif "verse" in ask or "chorus" in ask or "bridge" in ask or "intro" in ask:
+            text = "I added a section at the end."
+            calls = [
+                ToolCall(
+                    "e1",
+                    "edit_lyrics",
+                    {
+                        "operation": "append",
+                        "text": "the porch light hums a borrowed tune\nand every moth remembers June",
+                    },
+                )
+            ]
+        elif "rhyme" in ask or "word" in ask:
+            word = re.findall(r"[a-z']+", ask)[-1]
+            calls = [ToolCall("l1", "lookup_words", {"word": word})]
+            text = ""
+        elif "review" in ask:
+            text = "Demo review: the images are strong; the tense shifts in the second verse."
+
+        return self._turn(text, calls)
+
+    @staticmethod
+    def _turn(text, calls):
+        from app.ai.claude import ChatTurn
+
+        content = ([{"type": "text", "text": text}] if text else []) + [
+            {"type": "tool_use", "id": c.id, "name": c.name, "input": c.input}
+            for c in calls
+        ]
+
+        return ChatTurn(text, calls, content, 300, 60)
+
 
 SAMPLE_FRAGMENTS = [
     ("the porch light hums a lullaby for moths", ["night", "porch"]),

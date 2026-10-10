@@ -46,6 +46,7 @@ Cognito token). The user ID always comes from the token, never from the request.
 | `GET /notebook`                       | One page of songs and fragments together (Home) | 200 |
 | `GET /search`                         | Keyword and tag search (see below)     | 200     |
 | `GET /tags`                           | My tags with counts                    | 200     |
+| `POST /ai/chat`                       | Assistant chat: conversation + page context in; text, lyric edits, title, dictionary answers out (token checkpoint) | 200, 422, 429 |
 | `GET /words/{word}`                   | Rhymes, near rhymes, synonyms, antonyms (dictionaries, no AI) | 200, 422 |
 
 A missing item (or one that belongs to someone else) returns 404. Invalid input

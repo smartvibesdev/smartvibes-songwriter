@@ -68,3 +68,10 @@ def near_key(phonemes: Phonemes) -> str:
 def sound_key(phonemes: Phonemes) -> str:
     """The whole word's sound, so homophones (night, knight) can be told apart from rhymes."""
     return " ".join(plain(phonemes))
+
+
+def vowel_key(phonemes: Phonemes) -> str:
+    """What slant (assonance) rhymes share: the vowel sounds of the rhyming part, ignoring consonants."""
+    return " ".join(
+        phoneme.rstrip("012") for phoneme in rhyming_part(phonemes) if is_vowel(phoneme)
+    )

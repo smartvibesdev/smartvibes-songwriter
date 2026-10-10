@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app import service, words
 from app.ai import budget
+from app.ai import chat as ai_chat
 from app.ai import service as ai_service
 from app.ai.claude import AiNotConfigured, AiUnavailable, TextGenerator, get_generator
 from app.models import (
@@ -14,6 +15,8 @@ from app.models import (
     MAX_TAGS,
     MAX_WORD_LENGTH,
     BudgetOut,
+    ChatIn,
+    ChatOut,
     Fragment,
     FragmentIn,
     GenerateIn,
@@ -230,6 +233,34 @@ def ai_generate(
         text=result.text,
         dial=result.dial,
         temperature=result.temperature,
+        tokens=TokenCount(input=result.input_tokens, output=result.output_tokens),
+        budget=_budget_out(result.usage),
+    )
+
+
+@app.post("/ai/chat")
+def ai_chat_route(
+    user_id: UserId,
+    body: ChatIn,
+    generator: Annotated[TextGenerator, Depends(get_generator)],
+) -> ChatOut:
+    try:
+        result = ai_chat.chat(
+            user_id, generator, body.messages, body.context, body.dial
+        )
+    except budget.BudgetExceeded as error:
+        if error.scope == "global":
+            detail = "AI is paused for everyone for today. Try again tomorrow."
+        else:
+            detail = "You have used today's AI budget. It resets at midnight UTC."
+
+        raise HTTPException(status_code=429, detail=detail) from error
+
+    return ChatOut(
+        text=result.text,
+        edits=result.edits,
+        title=result.title,
+        dictionary=result.dictionary,
         tokens=TokenCount(input=result.input_tokens, output=result.output_tokens),
         budget=_budget_out(result.usage),
     )

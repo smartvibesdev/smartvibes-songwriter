@@ -3,7 +3,14 @@
 from datetime import datetime
 from typing import Annotated, Generic, Literal, TypeVar
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+)
 
 from app.ai.prompts import DIAL_MAX, DIAL_MIN, MAX_SEED_LENGTH
 
@@ -219,5 +226,80 @@ class WordInfo(BaseModel):
     syllables: list[int]
     rhymes: list[RhymeWord]
     near_rhymes: list[RhymeWord]
+    slant_rhymes: list[RhymeWord]
     synonyms: list[PartOfSpeechWords]
     antonyms: list[PartOfSpeechWords]
+
+
+# --- AI chat ---
+
+MAX_CHAT_MESSAGES = 20
+MAX_CHAT_CONTENT = 4000
+
+
+class ChatMessageIn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: Annotated[
+        str, StringConstraints(min_length=1, max_length=MAX_CHAT_CONTENT)
+    ]
+
+
+class ChatContextIn(BaseModel):
+    """What the page on screen shows, so the assistant can talk about it."""
+
+    page: Literal["song", "home"] = "home"
+    title: Annotated[str, StringConstraints(max_length=MAX_TITLE)] = ""
+    lyrics: Annotated[str, StringConstraints(max_length=MAX_SONG_BODY)] = ""
+    selection: Annotated[str, StringConstraints(max_length=MAX_SONG_BODY)] = ""
+    # The lines (1 is the first) that the selection covers, when there is one.
+    selection_start_line: int | None = Field(None, ge=1)
+    selection_end_line: int | None = Field(None, ge=1)
+
+
+class ChatIn(BaseModel):
+    """The recent conversation (last message from the user), the page context and the wildness dial."""
+
+    messages: Annotated[
+        list[ChatMessageIn], Field(min_length=1, max_length=MAX_CHAT_MESSAGES)
+    ]
+    context: ChatContextIn = ChatContextIn()
+    dial: int = Field(5, ge=DIAL_MIN, le=DIAL_MAX)
+
+    @field_validator("messages")
+    @classmethod
+    def last_message_is_from_the_user(
+        cls, messages: list[ChatMessageIn]
+    ) -> list[ChatMessageIn]:
+        if messages[-1].role != "user":
+            raise ValueError("the last message must be from the user")
+
+        return messages
+
+
+class EditOut(BaseModel):
+    """One change to the lyrics. Line numbers start at 1 and refer to the lyrics as they were sent."""
+
+    operation: Literal["replace", "insert_after", "append"]
+    start_line: int | None = None
+    end_line: int | None = None
+    text: str
+
+
+class DictionaryOut(BaseModel):
+    """A short dictionary answer for one word (no AI): a few of each kind of related word."""
+
+    word: str
+    rhymes: list[str]
+    near_rhymes: list[str]
+    slant_rhymes: list[str]
+    synonyms: list[str]
+    antonyms: list[str]
+
+
+class ChatOut(BaseModel):
+    text: str
+    edits: list[EditOut]
+    title: str | None
+    dictionary: list[DictionaryOut]
+    tokens: TokenCount
+    budget: BudgetOut

@@ -35,6 +35,10 @@ Take the sounds from the stressed vowel to the end of the word. Drop the digit.
 consonant that is a close cousin of the original: N and M (both hummed through the nose), or T and D
 (both a quick tap of the tongue). So stone / home is a near rhyme, and so is food / shoot.
 
+**A slant rhyme** shares only the vowel sounds, with any consonants: cranky / happy / family, or stone / go / show.
+It is the loosest kind, and songwriters use it a lot. Slant rhymes of about the same length as your word are
+listed first.
+
 ## What is done ahead of time
 
 Finding the rhymes for one word needs a list of every word that shares its ending. Making that list
@@ -60,7 +64,7 @@ lookup.
 
 ### What is in the file
 
-It holds three small tables:
+It holds four small tables (a fourth, for slant rhymes, works like the near-rhyme one):
 
 1. **Word → its endings.** For "food": `UW D` (exact ending), `UW ~2` (near-rhyme family: a vowel
    plus "any of T or D"), its whole sound `F UW D`, and 1 syllable.

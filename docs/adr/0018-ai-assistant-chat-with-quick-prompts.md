@@ -103,3 +103,23 @@ How the AI changes the song:
 - Build in small steps, one branch each: (1) the shell drawer with quick prompts that call the
   existing generation route; (2) chat with history and the token checkpoint; (3) tool use with
   direct edits and Undo; (4) saving conversations, only if wanted.
+
+## Built so far (2026-10-09)
+
+- **Drawer and sheet in the app shell**, with quick prompts that change with the page (song page or
+  Home), and a typed message box.
+- **`POST /ai/chat`** (`backend/app/ai/chat.py`): the last 12 messages and the page context go to
+  Claude with three tools. `edit_lyrics` (replace, insert after, or append, by line number) and
+  `set_title` are returned to the page, which applies them; `lookup_words` runs on the backend
+  against the dictionaries (ADR 0016). Each call to Claude passes the token checkpoint on its
+  own, and a turn makes at most three calls.
+- **Edits are applied in the editor in one step**, so one Undo (the button in the chat, or Cmd/Ctrl+Z)
+  takes the whole change back. The new lines are highlighted for five seconds.
+- **Questions that are only "what rhymes with X", "another word for X" or "opposite of X" skip the AI
+  entirely**: the page asks the dictionary route directly and shows the chips labelled "Dictionary ·
+  no tokens". Clicking a chip asks the same question about that word.
+- The Generate panel is gone from the song page; its jobs are quick prompts. The wildness dial is kept
+  (temperature, and extra constraints from 8 to 10) under a "Wildness" line in the drawer.
+- **Not built:** saved conversations; Home-page tools beyond fragments and lookups; a drag handle on the
+  phone sheet; prompt caching. The model is still `claude-sonnet-4-6` (decision still open).
+
